@@ -2496,15 +2496,45 @@ high school | Trường cấp ba 🏫`;
         const isMultiWord = wordStructure.words.length >= 2;
 
         return React.createElement('div', { className: "flex flex-col items-center gap-3 w-full animate-fade-in" },
-          // Meaning Banner (Vietnamese translation & instruction)
-          React.createElement('div', { className: "w-full text-center bg-purple-100/80 border border-purple-200 p-3 sm:p-4 rounded-2xl shadow-sm" },
-            currentItem?.vi ?
-              React.createElement('div', { className: "text-lg sm:text-2xl text-purple-950 font-extrabold flex items-center justify-center gap-2" },
-                React.createElement('span', null, currentItem.vi)
-              ) :
-              React.createElement('div', { className: "text-base sm:text-xl text-purple-900 font-bold" },
-                "🎧 Lắng nghe đánh vần và ghép các chữ cái thành từ vựng hoàn chỉnh"
+          // Mode Switcher & Soundboard Bar
+          React.createElement('div', { className: "w-full max-w-2xl flex flex-wrap items-center justify-between gap-2 bg-purple-100/70 border border-purple-200 px-3 py-2 rounded-2xl text-xs sm:text-sm font-extrabold" },
+            React.createElement('div', { className: "flex items-center gap-1 bg-white p-1 rounded-xl border border-purple-200 shadow-xs" },
+              React.createElement('span', { className: "text-slate-500 px-1 text-xs hidden sm:inline" }, "Phát âm:"),
+              React.createElement('button', {
+                type: "button",
+                onClick: () => setSpellingMode('alphabet'),
+                title: "Phát âm tên chữ cái chuẩn tiếng Anh (A /eɪ/, B /biː/...)",
+                className: `px-2.5 py-1 rounded-lg transition-all cursor-pointer flex items-center gap-1 ${
+                  spellingMode === 'alphabet' ? 'bg-purple-600 text-white shadow-xs' : 'text-slate-700 hover:bg-purple-50'
+                }`
+              },
+                React.createElement('span', null, "🔤"),
+                React.createElement('span', null, "Tên chữ cái (A-B-C)")
+              ),
+              React.createElement('button', {
+                type: "button",
+                onClick: () => setSpellingMode('phonics'),
+                title: "Phát âm ngữ âm Phonics (/æ/, /b/, /k/...)",
+                className: `px-2.5 py-1 rounded-lg transition-all cursor-pointer flex items-center gap-1 ${
+                  spellingMode === 'phonics' ? 'bg-purple-600 text-white shadow-xs' : 'text-slate-700 hover:bg-purple-50'
+                }`
+              },
+                React.createElement('span', null, "🗣️"),
+                React.createElement('span', null, "Âm Phonics (/æ/, /b/...)")
               )
+            ),
+
+            React.createElement('button', {
+              type: "button",
+              onClick: () => {
+                if (onOpenSoundboard) onOpenSoundboard();
+              },
+              title: "Mở bảng tra cứu & nghe thử toàn bộ 26 chữ cái (A - Z)",
+              className: "px-3 py-1.5 rounded-xl bg-amber-100 hover:bg-amber-200 active:bg-amber-300 text-amber-900 border border-amber-300 shadow-xs transition-all cursor-pointer flex items-center gap-1.5 font-black text-xs sm:text-sm shrink-0"
+            },
+              React.createElement('span', null, "📖"),
+              React.createElement('span', null, "Bảng âm 26 chữ cái")
+            )
           ),
 
           // Learning phase guidance banner
@@ -2556,47 +2586,6 @@ high school | Trường cấp ba 🏫`;
               React.createElement('span', { className: "text-base" }, "👉"),
               React.createElement('span', null, "Bây giờ hãy bấm chọn các chữ cái theo trật tự đúng!")
             ) : null,
-
-          // Mode Switcher & Soundboard Bar
-          React.createElement('div', { className: "w-full max-w-2xl flex flex-wrap items-center justify-between gap-2 bg-purple-100/70 border border-purple-200 px-3 py-2 rounded-2xl text-xs sm:text-sm font-extrabold" },
-            React.createElement('div', { className: "flex items-center gap-1 bg-white p-1 rounded-xl border border-purple-200 shadow-xs" },
-              React.createElement('span', { className: "text-slate-500 px-1 text-xs hidden sm:inline" }, "Phát âm:"),
-              React.createElement('button', {
-                type: "button",
-                onClick: () => setSpellingMode('alphabet'),
-                title: "Phát âm tên chữ cái chuẩn tiếng Anh (A /eɪ/, B /biː/...)",
-                className: `px-2.5 py-1 rounded-lg transition-all cursor-pointer flex items-center gap-1 ${
-                  spellingMode === 'alphabet' ? 'bg-purple-600 text-white shadow-xs' : 'text-slate-700 hover:bg-purple-50'
-                }`
-              },
-                React.createElement('span', null, "🔤"),
-                React.createElement('span', null, "Tên chữ cái (A-B-C)")
-              ),
-              React.createElement('button', {
-                type: "button",
-                onClick: () => setSpellingMode('phonics'),
-                title: "Phát âm ngữ âm Phonics (/æ/, /b/, /k/...)",
-                className: `px-2.5 py-1 rounded-lg transition-all cursor-pointer flex items-center gap-1 ${
-                  spellingMode === 'phonics' ? 'bg-purple-600 text-white shadow-xs' : 'text-slate-700 hover:bg-purple-50'
-                }`
-              },
-                React.createElement('span', null, "🗣️"),
-                React.createElement('span', null, "Âm Phonics (/æ/, /b/...)")
-              )
-            ),
-
-            React.createElement('button', {
-              type: "button",
-              onClick: () => {
-                if (onOpenSoundboard) onOpenSoundboard();
-              },
-              title: "Mở bảng tra cứu & nghe thử toàn bộ 26 chữ cái (A - Z)",
-              className: "px-3 py-1.5 rounded-xl bg-amber-100 hover:bg-amber-200 active:bg-amber-300 text-amber-900 border border-amber-300 shadow-xs transition-all cursor-pointer flex items-center gap-1.5 font-black text-xs sm:text-sm shrink-0"
-            },
-              React.createElement('span', null, "📖"),
-              React.createElement('span', null, "Bảng âm 26 chữ cái")
-            )
-          ),
 
           // TARGET LETTER DISPLAY (All Words on the Same Line separated by clean whitespace gap)
           React.createElement('div', {
@@ -2677,6 +2666,20 @@ high school | Trường cấp ba 🏫`;
                 );
               })
             )
+          ),
+
+          // DÒNG CHỮ CHỨA NGHĨA TIẾNG VIỆT CỦA TỪ VỰNG (Nằm giữa ô hiển thị và ô bấm chọn các chữ cái)
+          React.createElement('div', {
+            className: "w-full max-w-2xl text-center bg-gradient-to-r from-purple-100/90 via-indigo-50/90 to-purple-100/90 border-2 border-purple-300/80 p-2.5 sm:p-3.5 rounded-2xl shadow-xs my-0.5 transition-all"
+          },
+            currentItem?.vi ?
+              React.createElement('div', { className: "text-lg sm:text-2xl text-purple-950 font-black flex items-center justify-center gap-2 flex-wrap" },
+                React.createElement('span', { className: "text-purple-700 text-xs sm:text-sm uppercase tracking-wider font-extrabold bg-white/90 px-2.5 py-1 rounded-xl border border-purple-200 shadow-2xs" }, "Nghĩa tiếng Việt:"),
+                React.createElement('span', { className: "text-purple-950 font-black" }, currentItem.vi)
+              ) :
+              React.createElement('div', { className: "text-sm sm:text-base text-purple-900 font-bold" },
+                "🎧 Lắng nghe đánh vần và ghép các chữ cái thành từ vựng hoàn chỉnh"
+              )
           ),
 
           // Message Feedback
