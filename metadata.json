@@ -1,0 +1,8 @@
+{
+  "name": "Nghe và đánh vần từ vựng tiếng Anh",
+  "description": "Trò chơi tương tác học tiếng Anh qua nghe đánh vần từ vựng (chế độ Tên chữ cái & Phonics chuẩn quốc tế với phát âm chuẩn xác) và sắp xếp các kí tự thành từ hoàn chỉnh.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

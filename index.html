@@ -1,0 +1,3192 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Nghe và đánh vần từ vựng tiếng Anh</title>
+    <meta name="description" content="Trò chơi tương tác học tiếng Anh qua nghe đánh vần từ vựng (chế độ Tên chữ cái & Phonics chuẩn quốc tế với phát âm chuẩn xác) và sắp xếp các kí tự thành từ hoàn chỉnh." />
+    <meta property="og:title" content="Nghe và đánh vần từ vựng tiếng Anh" />
+    <meta property="og:description" content="Trò chơi tương tác học tiếng Anh qua nghe đánh vần từ vựng (chế độ Tên chữ cái & Phonics chuẩn quốc tế với phát âm chuẩn xác) và sắp xếp các kí tự thành từ hoàn chỉnh." />
+    <script>
+      (function() {
+        try {
+          var currentFetch = (typeof window.fetch === 'function') ? window.fetch.bind(window) : undefined;
+          var makeFetchWritable = function(target) {
+            if (!target) return;
+            try {
+              var desc = Object.getOwnPropertyDescriptor(target, 'fetch');
+              if (!desc || desc.configurable !== false) {
+                Object.defineProperty(target, 'fetch', {
+                  get: function() { return currentFetch; },
+                  set: function(fn) { currentFetch = fn; },
+                  configurable: true,
+                  enumerable: true
+                });
+              }
+            } catch (e) {}
+          };
+          makeFetchWritable(window);
+          if (typeof globalThis !== 'undefined' && globalThis !== window) {
+            makeFetchWritable(globalThis);
+          }
+          if (window.Window && window.Window.prototype) {
+            makeFetchWritable(window.Window.prototype);
+          }
+        } catch (err) {
+          console.warn('Fetch polyfill error:', err);
+        }
+      })();
+    </script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+      body {
+        font-family: 'Nunito', sans-serif;
+      }
+      @keyframes shake {
+        0%, 100% { transform: translateX(0); }
+        20%, 60% { transform: translateX(-6px); }
+        40%, 80% { transform: translateX(6px); }
+      }
+      .animate-shake {
+        animation: shake 0.4s ease-in-out;
+      }
+      @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(8px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      .animate-fade-in {
+        animation: fadeIn 0.35s ease-out;
+      }
+      @keyframes pulseGlow {
+        0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4); }
+        50% { box-shadow: 0 0 0 8px rgba(245, 158, 11, 0); }
+      }
+      .animate-pulse-glow {
+        animation: pulseGlow 1.2s infinite;
+      }
+    </style>
+    <link rel="stylesheet" href="/index.css">
+</head>
+<body class="bg-slate-50 min-h-screen text-slate-800">
+    <noscript>Bạn cần bật JavaScript để chạy ứng dụng này.</noscript>
+    <div id="root"></div>
+
+    <script type="module">
+      import React from 'react';
+      import ReactDOM from 'react-dom/client';
+
+      const { useState, useCallback, useMemo, useRef, useEffect } = React;
+
+      // --- Types & Game State ---
+      const GameState = {
+        Start: 0,
+        TopicSelection: 1,
+        Playing: 2,
+        Congrats: 3,
+        TopicEditor: 4,
+      };
+
+      // --- Audio Synthesizer (Zero External Dependencies) ---
+      const playSound = (type) => {
+        try {
+          const AudioCtx = window.AudioContext || window.webkitAudioContext;
+          if (!AudioCtx) return;
+          const ctx = new AudioCtx();
+          const now = ctx.currentTime;
+
+          if (type === 'click') {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(520, now);
+            osc.frequency.exponentialRampToValueAtTime(820, now + 0.08);
+            gain.gain.setValueAtTime(0.2, now);
+            gain.gain.exponentialRampToValueAtTime(0.01, now + 0.08);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start(now);
+            osc.stop(now + 0.08);
+          } else if (type === 'wrong') {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(180, now);
+            osc.frequency.exponentialRampToValueAtTime(110, now + 0.22);
+            gain.gain.setValueAtTime(0.25, now);
+            gain.gain.exponentialRampToValueAtTime(0.01, now + 0.22);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start(now);
+            osc.stop(now + 0.22);
+          } else if (type === 'gap') {
+            // Distinct pleasant audio chime indicating the gap between words
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(440, now);
+            osc.frequency.exponentialRampToValueAtTime(660, now + 0.15);
+            gain.gain.setValueAtTime(0.2, now);
+            gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start(now);
+            osc.stop(now + 0.2);
+          } else if (type === 'win') {
+            [523.25, 659.25, 783.99, 1046.50].forEach((freq, idx) => {
+              const osc = ctx.createOscillator();
+              const gain = ctx.createGain();
+              osc.type = 'triangle';
+              osc.frequency.setValueAtTime(freq, now + idx * 0.09);
+              gain.gain.setValueAtTime(0.18, now + idx * 0.09);
+              gain.gain.exponentialRampToValueAtTime(0.01, now + idx * 0.09 + 0.3);
+              osc.connect(gain);
+              gain.connect(ctx.destination);
+              osc.start(now + idx * 0.09);
+              osc.stop(now + idx * 0.09 + 0.3);
+            });
+          }
+        } catch (e) {
+          // Audio autoplay restriction fallback
+        }
+      };
+
+      // --- Preset Topics (Rich Vocabulary with Single & Multi-Word Terms) ---
+      const defaultTopics = {
+        "Sports & Activities (Thể thao & Hoạt động)": [
+          { en: "table tennis", vi: "Bóng bàn 🏓" },
+          { en: "football", vi: "Bóng đá ⚽" },
+          { en: "swimming pool", vi: "Hồ bơi 🏊" },
+          { en: "martial arts", vi: "Võ thuật 🥋" },
+          { en: "roller skates", vi: "Giày trượt patin 🛼" },
+          { en: "basketball", vi: "Bóng rổ 🏀" },
+          { en: "badminton", vi: "Cầu lông 🏸" },
+          { en: "sports day", vi: "Ngày hội thể thao 🏅" },
+          { en: "long jump", vi: "Nhảy xa 🏃" },
+          { en: "kickboxing", vi: "Đấm bốc kickboxing 🥊" },
+          { en: "aerobics class", vi: "Lớp thể dục nhịp điệu 💃" },
+          { en: "running race", vi: "Cuộc thi chạy 🏃‍♂️" }
+        ],
+        "Health & Body (Sức khỏe & Cơ thể)": [
+          { en: "stomach ache", vi: "Đau bụng 🤢" },
+          { en: "sore throat", vi: "Đau họng 🤒" },
+          { en: "headache", vi: "Đau đầu 🤕" },
+          { en: "body temperature", vi: "Nhiệt độ cơ thể 🌡️" },
+          { en: "drinking water", vi: "Nước uống 💧" },
+          { en: "healthy habit", vi: "Thói quen lành mạnh 🥗" },
+          { en: "exercise", vi: "Tập thể dục 🏃" },
+          { en: "fresh fruit", vi: "Trái cây tươi 🍎" },
+          { en: "medicine", vi: "Thuốc uống 💊" }
+        ],
+        "Food & Daily Life (Ẩm thực & Đời sống)": [
+          { en: "orange juice", vi: "Nước cam 🍊" },
+          { en: "ice cream", vi: "Kem 🍦" },
+          { en: "apple pie", vi: "Bánh táo 🥧" },
+          { en: "hot chocolate", vi: "Sô-cô-la nóng ☕" },
+          { en: "strawberries", vi: "Dâu tây 🍓" },
+          { en: "supermarket", vi: "Siêu thị 🛒" },
+          { en: "pencil case", vi: "Hộp bút ✏️" },
+          { en: "high school", vi: "Trường cấp ba 🏫" },
+          { en: "backpack", vi: "Ba lô đi học 🎒" }
+        ]
+      };
+
+      // Standard English alphabet data with verified pronunciation tokens and IPA:
+      // - Alphabet Letter Names: A (/eɪ/), B (/biː/), C (/siː/)... standard letter names
+      // - Phonics Sounds: Clear phoneme syllables (/æ/, /b/, /k/...) with accurate speech synthesis & Vietnamese comparison
+      const ALPHABET_DATA = {
+        'A': {
+          letter: 'A',
+          speech: 'A.',
+          ipa: '/eɪ/',
+          vi: 'ây',
+          name: 'ay',
+          phonicsIpa: '/æ/',
+          phonicsViShort: 'a-e bẹt',
+          phonicsVi: 'Gần giống âm "a-e" bẹt tiếng Việt',
+          phonicsReadingGuide: 'Mở rộng khóe miệng sang hai bên (bẹt miệng), hạ thấp hàm dưới, phát âm lai giữa âm "a" và "e" trong tiếng Việt thật ngắn và dứt khoát.',
+          phonicsVietnameseComparison: 'Gần giống âm "a" pha "e" trong tiếng Việt (e-a bẹt), như cách phát âm từ "cát" khi bẹt miệng.',
+          phonicsSpeech: 'ah',
+          vietnameseSpeech: 'a e',
+          example: 'Apple',
+          exampleIpa: '/ˈæp.əl/',
+          exampleVi: 'Quả táo',
+          exampleIcon: '🍎'
+        },
+        'B': {
+          letter: 'B',
+          speech: 'B.',
+          ipa: '/biː/',
+          vi: 'bi',
+          name: 'bee',
+          phonicsIpa: '/b/',
+          phonicsViShort: 'bờ (bật môi)',
+          phonicsVi: 'Gần giống âm "bờ" tiếng Việt (bật môi nhẹ)',
+          phonicsReadingGuide: 'Mím nhẹ hai môi chặn luồng hơi lại trong tích tắc, sau đó mở môi bật nhẹ âm /b/ dứt khoát, thanh quản rung nhẹ.',
+          phonicsVietnameseComparison: 'Rất giống âm "bờ" trong tiếng Việt (như trong "ba", "bóng", "bé").',
+          phonicsSpeech: 'buh',
+          vietnameseSpeech: 'bờ',
+          example: 'Ball',
+          exampleIpa: '/bɔːl/',
+          exampleVi: 'Quả bóng',
+          exampleIcon: '⚽'
+        },
+        'C': {
+          letter: 'C',
+          speech: 'C.',
+          ipa: '/siː/',
+          vi: 'xi',
+          name: 'see',
+          phonicsIpa: '/k/',
+          phonicsViShort: 'cờ / khờ (bật hơi họng)',
+          phonicsVi: 'Gần giống âm "cờ / khờ" bật hơi từ cuống họng',
+          phonicsReadingGuide: 'Nâng cuống lưỡi chạm vòm miệng chặn khí, sau đó hạ lưỡi bật mạnh luồng hơi gió dứt khoát ra ngoài (âm vô thanh, không rung cổ).',
+          phonicsVietnameseComparison: 'Gần giống âm "cờ" hoặc "khờ" bật hơi mạnh trong tiếng Việt (như trong "cá", "kem").',
+          phonicsSpeech: 'kuh',
+          vietnameseSpeech: 'cờ',
+          example: 'Cat',
+          exampleIpa: '/kæt/',
+          exampleVi: 'Con mèo',
+          exampleIcon: '🐱'
+        },
+        'D': {
+          letter: 'D',
+          speech: 'D.',
+          ipa: '/diː/',
+          vi: 'đi',
+          name: 'dee',
+          phonicsIpa: '/d/',
+          phonicsViShort: 'đờ (bật đầu lưỡi)',
+          phonicsVi: 'Gần giống âm "đờ" tiếng Việt (bật đầu lưỡi chân răng)',
+          phonicsReadingGuide: 'Đặt đầu lưỡi chạm vào nướu răng cửa trên chặn luồng khí, sau đó hạ đầu lưỡi bật nhanh âm /d/ dứt khoát, thanh quản rung.',
+          phonicsVietnameseComparison: 'Rất giống âm "đờ" trong tiếng Việt (như trong "đi", "đỏ", "đất").',
+          phonicsSpeech: 'duh',
+          vietnameseSpeech: 'đờ',
+          example: 'Dog',
+          exampleIpa: '/dɒɡ/',
+          exampleVi: 'Con chó',
+          exampleIcon: '🐶'
+        },
+        'E': {
+          letter: 'E',
+          speech: 'E.',
+          ipa: '/iː/',
+          vi: 'i',
+          name: 'ee',
+          phonicsIpa: '/e/',
+          phonicsViShort: 'e (ngắn dứt khoát)',
+          phonicsVi: 'Đọc giống âm "e" ngắn dứt khoát trong tiếng Việt',
+          phonicsReadingGuide: 'Mở miệng vừa phải, khóe miệng hơi căng nhẹ sang hai bên, phát âm âm "e" thật ngắn gọn và dứt khoát.',
+          phonicsVietnameseComparison: 'Rất giống âm "e" trong tiếng Việt (như trong "em", "keng", "bè").',
+          phonicsSpeech: 'eh',
+          vietnameseSpeech: 'e',
+          example: 'Egg',
+          exampleIpa: '/eɡ/',
+          exampleVi: 'Quả trứng',
+          exampleIcon: '🥚'
+        },
+        'F': {
+          letter: 'F',
+          speech: 'F.',
+          ipa: '/ef/',
+          vi: 'ép',
+          name: 'eff',
+          phonicsIpa: '/f/',
+          phonicsViShort: 'phờ (thổi gió răng môi)',
+          phonicsVi: 'Gần giống âm "phờ" tiếng Việt (răng trên chạm môi dưới thổi gió)',
+          phonicsReadingGuide: 'Đặt nhẹ hàm răng cửa trên chạm vào phần trong môi dưới, đẩy luồng hơi gió xì qua kẽ răng và môi (âm vô thanh).',
+          phonicsVietnameseComparison: 'Gần giống âm "phờ" trong tiếng Việt (như trong "phở", "pha") nhưng đẩy luồng hơi gió rõ rệt hơn.',
+          phonicsSpeech: 'fuh',
+          vietnameseSpeech: 'phờ',
+          example: 'Fish',
+          exampleIpa: '/fɪʃ/',
+          exampleVi: 'Con cá',
+          exampleIcon: '🐟'
+        },
+        'G': {
+          letter: 'G',
+          speech: 'G.',
+          ipa: '/dʒiː/',
+          vi: 'di',
+          name: 'gee',
+          phonicsIpa: '/ɡ/',
+          phonicsViShort: 'gờ (bật cuống họng)',
+          phonicsVi: 'Gần giống âm "gờ" tiếng Việt (phát âm từ cuống họng)',
+          phonicsReadingGuide: 'Nâng cuống lưỡi chạm vòm miệng chặn luồng khí, sau đó hạ cuống lưỡi bật ra kết hợp rung mạnh dây thanh quản.',
+          phonicsVietnameseComparison: 'Rất giống âm "gờ" trong tiếng Việt (như trong "gà", "gỗ", "gần").',
+          phonicsSpeech: 'guh',
+          vietnameseSpeech: 'gờ',
+          example: 'Goat',
+          exampleIpa: '/ɡoʊt/',
+          exampleVi: 'Con dê',
+          exampleIcon: '🐐'
+        },
+        'H': {
+          letter: 'H',
+          speech: 'H.',
+          ipa: '/eɪtʃ/',
+          vi: 'êy-ch',
+          name: 'aitch',
+          phonicsIpa: '/h/',
+          phonicsViShort: 'hờ (đẩy hơi nhẹ)',
+          phonicsVi: 'Gần giống âm "hờ" tiếng Việt (đẩy luồng hơi nhẹ từ họng)',
+          phonicsReadingGuide: 'Miệng mở tự nhiên thư giãn, đẩy luồng hơi thở ấm nhẹ nhàng từ sâu cổ họng ra ngoài (như khi hà hơi vào mặt gương).',
+          phonicsVietnameseComparison: 'Rất giống âm "hờ" trong tiếng Việt (như trong "hoa", "hồ", "hát").',
+          phonicsSpeech: 'huh',
+          vietnameseSpeech: 'hờ',
+          example: 'Hat',
+          exampleIpa: '/hæt/',
+          exampleVi: 'Cái mũ',
+          exampleIcon: '👒'
+        },
+        'I': {
+          letter: 'I',
+          speech: 'I.',
+          ipa: '/aɪ/',
+          vi: 'ai',
+          name: 'eye',
+          phonicsIpa: '/ɪ/',
+          phonicsViShort: 'i ngắn (nửa i nửa ê)',
+          phonicsVi: 'Gần giống âm "i" ngắn (hơi hướng về âm "ê" nhẹ)',
+          phonicsReadingGuide: 'Mở miệng hơi hờ tự nhiên, nâng thân lưỡi lên vừa phải, phát âm âm "i" thật ngắn gọn, dứt khoát.',
+          phonicsVietnameseComparison: 'Gần giống âm "i" ngắn trong tiếng Việt, hơi lai một chút âm "ê" (như trong "tin", "xinh").',
+          phonicsSpeech: 'ih',
+          vietnameseSpeech: 'i',
+          example: 'Igloo',
+          exampleIpa: '/ˈɪɡ.luː/',
+          exampleVi: 'Nhà băng',
+          exampleIcon: '🛖'
+        },
+        'J': {
+          letter: 'J',
+          speech: 'J.',
+          ipa: '/dʒeɪ/',
+          vi: 'dây',
+          name: 'jay',
+          phonicsIpa: '/dʒ/',
+          phonicsViShort: 'chờ / gi (tròn môi bật rung)',
+          phonicsVi: 'Gần giống âm "chờ" hoặc "gi" (tròn môi bật rung họng)',
+          phonicsReadingGuide: 'Chu môi tròn nhẹ về phía trước, đầu lưỡi chạm vòm miệng rồi giật lùi bật ra luồng khí kết hợp rung mạnh thanh quản.',
+          phonicsVietnameseComparison: 'Gần giống âm "chờ" hoặc "gi" tiếng Việt nhưng tròn môi và bật rung mạnh mẽ hơn.',
+          phonicsSpeech: 'juh',
+          vietnameseSpeech: 'chờ',
+          example: 'Jam',
+          exampleIpa: '/dʒæm/',
+          exampleVi: 'Mứt quả',
+          exampleIcon: '🍓'
+        },
+        'K': {
+          letter: 'K',
+          speech: 'K.',
+          ipa: '/keɪ/',
+          vi: 'kây',
+          name: 'kay',
+          phonicsIpa: '/k/',
+          phonicsViShort: 'cờ / k (bật hơi dứt khoát)',
+          phonicsVi: 'Gần giống âm "cờ / khờ" tiếng Việt (bật hơi dứt khoát)',
+          phonicsReadingGuide: 'Tương tự chữ C, nâng cuống lưỡi chạm vòm họng chặn khí rồi bật dứt khoát luồng hơi ra ngoài (không rung thanh quản).',
+          phonicsVietnameseComparison: 'Rất giống âm "cờ / k" trong tiếng Việt (như trong "kéo", "kính", "kem").',
+          phonicsSpeech: 'kuh',
+          vietnameseSpeech: 'kờ',
+          example: 'Kite',
+          exampleIpa: '/kaɪt/',
+          exampleVi: 'Cái diều',
+          exampleIcon: '🪁'
+        },
+        'L': {
+          letter: 'L',
+          speech: 'L.',
+          ipa: '/el/',
+          vi: 'eo',
+          name: 'ell',
+          phonicsIpa: '/l/',
+          phonicsViShort: 'lờ (đầu lưỡi chạm nướu)',
+          phonicsVi: 'Gần giống âm "lờ" tiếng Việt (đầu lưỡi chạm nướu răng trên)',
+          phonicsReadingGuide: 'Đặt đầu lưỡi chạm vào nướu răng cửa hàm trên, đẩy luồng âm thanh thoát ra hai bên cạnh lưỡi và rung dây thanh quản.',
+          phonicsVietnameseComparison: 'Rất giống âm "lờ" trong tiếng Việt (như trong "lá", "lang", "lúa").',
+          phonicsSpeech: 'luh',
+          vietnameseSpeech: 'lờ',
+          example: 'Lion',
+          exampleIpa: '/ˈlaɪ.ən/',
+          exampleVi: 'Sư tử',
+          exampleIcon: '🦁'
+        },
+        'M': {
+          letter: 'M',
+          speech: 'M.',
+          ipa: '/em/',
+          vi: 'em',
+          name: 'emm',
+          phonicsIpa: '/m/',
+          phonicsViShort: 'mờ (khép môi ngân)',
+          phonicsVi: 'Gần giống âm "mờ" tiếng Việt (khép môi rung ngân qua mũi)',
+          phonicsReadingGuide: 'Ngậm nhẹ hai môi lại, rung dây thanh quản để luồng âm thanh ngân vang thoát ra đường mũi (như khi ngâm nga "ừm...").',
+          phonicsVietnameseComparison: 'Rất giống âm "mờ" trong tiếng Việt (như trong "mẹ", "mây", "má").',
+          phonicsSpeech: 'muh',
+          vietnameseSpeech: 'mờ',
+          example: 'Moon',
+          exampleIpa: '/muːn/',
+          exampleVi: 'Mặt trăng',
+          exampleIcon: '🌙'
+        },
+        'N': {
+          letter: 'N',
+          speech: 'N.',
+          ipa: '/en/',
+          vi: 'en',
+          name: 'enn',
+          phonicsIpa: '/n/',
+          phonicsViShort: 'nờ (đầu lưỡi áp nướu)',
+          phonicsVi: 'Gần giống âm "nờ" tiếng Việt (đầu lưỡi áp nướu răng trên)',
+          phonicsReadingGuide: 'Áp sát đầu lưỡi lên nướu răng cửa hàm trên, mở miệng nhẹ, rung thanh quản đẩy luồng âm ngân thoát qua mũi.',
+          phonicsVietnameseComparison: 'Rất giống âm "nờ" trong tiếng Việt (như trong "nụ", "nắng", "nước").',
+          phonicsSpeech: 'nuh',
+          vietnameseSpeech: 'nờ',
+          example: 'Net',
+          exampleIpa: '/net/',
+          exampleVi: 'Cái lưới',
+          exampleIcon: '🥅'
+        },
+        'O': {
+          letter: 'O',
+          speech: 'O.',
+          ipa: '/oʊ/',
+          vi: 'âu',
+          name: 'oh',
+          phonicsIpa: '/ɒ/',
+          phonicsViShort: 'o ngắn (tròn miệng)',
+          phonicsVi: 'Gần giống âm "o" ngắn tròn miệng trong tiếng Việt',
+          phonicsReadingGuide: 'Hạ quai hàm, mở tròn môi tự nhiên, phát âm âm "o" thật ngắn và dứt khoát.',
+          phonicsVietnameseComparison: 'Gần giống âm "o" ngắn trong tiếng Việt (như trong "học", "cóc", "bò").',
+          phonicsSpeech: 'aw',
+          vietnameseSpeech: 'o',
+          example: 'Octopus',
+          exampleIpa: '/ˈɒk.tə.pəs/',
+          exampleVi: 'Bạch tuộc',
+          exampleIcon: '🐙'
+        },
+        'P': {
+          letter: 'P',
+          speech: 'P.',
+          ipa: '/piː/',
+          vi: 'pi',
+          name: 'pee',
+          phonicsIpa: '/p/',
+          phonicsViShort: 'pờ (mím môi bật hơi gió)',
+          phonicsVi: 'Gần giống âm "pờ" tiếng Việt (mím môi bật hơi gió thật mạnh)',
+          phonicsReadingGuide: 'Mím chặt hai môi giữ áp suất không khí trong miệng, sau đó mở bật môi đẩy mạnh luồng gió ra (âm vô thanh, không rung cổ).',
+          phonicsVietnameseComparison: 'Gần giống âm "pờ" trong tiếng Việt nhưng phải bật hơi gió mạnh mẽ hơn (bật phập hơi dứt khoát).',
+          phonicsSpeech: 'puh',
+          vietnameseSpeech: 'pờ',
+          example: 'Pig',
+          exampleIpa: '/pɪɡ/',
+          exampleVi: 'Con heo',
+          exampleIcon: '🐷'
+        },
+        'Q': {
+          letter: 'Q',
+          speech: 'Q.',
+          ipa: '/kjuː/',
+          vi: 'kiu',
+          name: 'cue',
+          phonicsIpa: '/kw/',
+          phonicsViShort: 'quờ (kết hợp k + w)',
+          phonicsVi: 'Gần giống âm "quờ" tiếng Việt (kết hợp âm k + w)',
+          phonicsReadingGuide: 'Bật âm /k/ từ cổ họng đồng thời chu tròn môi chuyển nhanh sang âm /w/ lướt dứt khoát.',
+          phonicsVietnameseComparison: 'Rất giống âm "quờ" trong tiếng Việt (như trong "quê", "quả", "quạt").',
+          phonicsSpeech: 'kwuh',
+          vietnameseSpeech: 'quờ',
+          example: 'Queen',
+          exampleIpa: '/kwiːn/',
+          exampleVi: 'Nữ hoàng',
+          exampleIcon: '👑'
+        },
+        'R': {
+          letter: 'R',
+          speech: 'are',
+          ipa: '/ɑːr/',
+          vi: 'a/ar',
+          name: 'ar',
+          phonicsIpa: '/r/',
+          phonicsViShort: 'rờ (uốn cong lưỡi)',
+          phonicsVi: 'Gần giống âm "rờ" tiếng Việt (uốn cong lưỡi không rung)',
+          phonicsReadingGuide: 'Hơi chu nhẹ môi, uốn cong đầu lưỡi về phía vòm miệng sau nhưng không chạm vào vòm miệng, rung thanh quản (không đánh rung đầu lưỡi như tiếng Việt).',
+          phonicsVietnameseComparison: 'Gần giống âm "rờ" miền Nam tiếng Việt nhưng cong lưỡi mềm và không rung đầu lưỡi.',
+          phonicsSpeech: 'ruh',
+          vietnameseSpeech: 'rờ',
+          example: 'Rabbit',
+          exampleIpa: '/ˈræb.ɪt/',
+          exampleVi: 'Con thỏ',
+          exampleIcon: '🐰'
+        },
+        'S': {
+          letter: 'S',
+          speech: 'S.',
+          ipa: '/es/',
+          vi: 'ét',
+          name: 'ess',
+          phonicsIpa: '/s/',
+          phonicsViShort: 'xờ / xì (răng khép xì gió)',
+          phonicsVi: 'Gần giống âm "xờ / xì" tiếng Việt (khép răng xì gió mạnh)',
+          phonicsReadingGuide: 'Khép hai hàm răng lại gần sát nhau, đặt đầu lưỡi gần nướu răng trên, đẩy luồng hơi gió dài và sắc nét qua kẽ răng: sss... (âm vô thanh).',
+          phonicsVietnameseComparison: 'Rất giống âm "xờ" hoặc tiếng xì gió trong tiếng Việt (như trong "xe", "xôi", "xanh").',
+          phonicsSpeech: 'sss',
+          vietnameseSpeech: 'xờ',
+          example: 'Sun',
+          exampleIpa: '/sʌn/',
+          exampleVi: 'Mặt trời',
+          exampleIcon: '☀️'
+        },
+        'T': {
+          letter: 'T',
+          speech: 'T.',
+          ipa: '/tiː/',
+          vi: 'ti',
+          name: 'tee',
+          phonicsIpa: '/t/',
+          phonicsViShort: 'tờ (bật đầu lưỡi)',
+          phonicsVi: 'Gần giống âm "tờ" tiếng Việt (bật đầu lưỡi chân răng dứt khoát)',
+          phonicsReadingGuide: 'Chạm đầu lưỡi vào nướu răng cửa hàm trên chặn hơi, sau đó hạ đầu lưỡi bật mạnh luồng khí gió ra dứt khoát (âm vô thanh).',
+          phonicsVietnameseComparison: 'Gần giống âm "tờ" trong tiếng Việt (như trong "tôi", "tay", "tối") nhưng bật luồng hơi gió rõ hơn.',
+          phonicsSpeech: 'tuh',
+          vietnameseSpeech: 'tờ',
+          example: 'Tiger',
+          exampleIpa: '/ˈtaɪ.ɡər/',
+          exampleVi: 'Con hổ',
+          exampleIcon: '🐯'
+        },
+        'U': {
+          letter: 'U',
+          speech: 'U.',
+          ipa: '/juː/',
+          vi: 'diu',
+          name: 'you',
+          phonicsIpa: '/ʌ/',
+          phonicsViShort: 'á / ớ (ngắn từ họng)',
+          phonicsVi: 'Gần giống âm "á / ớ" ngắn từ đáy họng tiếng Việt',
+          phonicsReadingGuide: 'Mở miệng tự nhiên thả lỏng môi và lưỡi, phát âm dứt khoát từ phần đáy cuống họng.',
+          phonicsVietnameseComparison: 'Rất giống âm "á" hoặc "ớ" ngắn dứt khoát trong tiếng Việt (như trong "ăn", "sân", "cơm").',
+          phonicsSpeech: 'uh',
+          vietnameseSpeech: 'á',
+          example: 'Umbrella',
+          exampleIpa: '/ʌmˈbrel.ə/',
+          exampleVi: 'Cái ô (dù)',
+          exampleIcon: '☂️'
+        },
+        'V': {
+          letter: 'V',
+          speech: 'V.',
+          ipa: '/viː/',
+          vi: 'vi',
+          name: 'vee',
+          phonicsIpa: '/v/',
+          phonicsViShort: 'vờ (răng trên chạm môi)',
+          phonicsVi: 'Gần giống âm "vờ" tiếng Việt (răng trên chạm môi dưới rung họng)',
+          phonicsReadingGuide: 'Đặt nhẹ răng cửa hàm trên lên môi dưới, đẩy luồng hơi đồng thời làm rung mạnh dây thanh quản trong cổ họng.',
+          phonicsVietnameseComparison: 'Rất giống âm "vờ" trong tiếng Việt (như trong "và", "vui", "vườn").',
+          phonicsSpeech: 'vuh',
+          vietnameseSpeech: 'vờ',
+          example: 'Van',
+          exampleIpa: '/væn/',
+          exampleVi: 'Xe tải nhỏ',
+          exampleIcon: '🚐'
+        },
+        'W': {
+          letter: 'W',
+          speech: 'double you',
+          ipa: '/ˈdʌbəl juː/',
+          vi: 'đắp-bô-liu',
+          name: 'double-u',
+          phonicsIpa: '/w/',
+          phonicsViShort: 'uờ (chu môi bật mở)',
+          phonicsVi: 'Gần giống âm "uờ" tiếng Việt (chu môi tròn rồi mở nhanh)',
+          phonicsReadingGuide: 'Chu hai môi tròn lại phía trước như khi sắp huýt sáo, sau đó mở nhanh miệng bung ra hai bên kết hợp rung thanh quản.',
+          phonicsVietnameseComparison: 'Gần giống âm "uờ" hoặc "qu" nhẹ trong tiếng Việt (như trong "hoa", "quê", "quần").',
+          phonicsSpeech: 'wuh',
+          vietnameseSpeech: 'uờ',
+          example: 'Water',
+          exampleIpa: '/ˈwɔː.tər/',
+          exampleVi: 'Nước uống',
+          exampleIcon: '💧'
+        },
+        'X': {
+          letter: 'X',
+          speech: 'X.',
+          ipa: '/eks/',
+          vi: 'éc-x',
+          name: 'ex',
+          phonicsIpa: '/ks/',
+          phonicsViShort: 'c-xì (k nối liền s)',
+          phonicsVi: 'Đọc lướt nhanh âm "c-xì" (bật /k/ rồi nối xì /s/)',
+          phonicsReadingGuide: 'Là sự kết hợp liên hoàn giữa âm bật hơi /k/ ở cuống họng và âm xì gió /s/ qua kẽ răng: /k/ + /s/ dứt khoát.',
+          phonicsVietnameseComparison: 'Tương đương âm bật "c" nối liền tiếng xì "x" trong tiếng Việt (như đuôi từ "box", "fox").',
+          phonicsSpeech: 'ks',
+          vietnameseSpeech: 'cờ xì',
+          example: 'Fox',
+          exampleIpa: '/fɒks/',
+          exampleVi: 'Con cáo',
+          exampleIcon: '🦊'
+        },
+        'Y': {
+          letter: 'Y',
+          speech: 'why',
+          ipa: '/waɪ/',
+          vi: 'oai',
+          name: 'why',
+          phonicsIpa: '/j/',
+          phonicsViShort: 'dờ / i (lướt âm nhẹ)',
+          phonicsVi: 'Gần giống âm "dờ / i" lướt âm nhẹ tiếng Việt',
+          phonicsReadingGuide: 'Nâng thân lưỡi lên gần vòm họng như phát âm "i", hai mép hơi bè sang bên rồi mở ra rung thanh quản lướt nhanh.',
+          phonicsVietnameseComparison: 'Rất giống âm "dờ" miền Nam hoặc âm "y" trong tiếng Việt (như trong "da", "dù", "yêu").',
+          phonicsSpeech: 'yuh',
+          vietnameseSpeech: 'dờ',
+          example: 'Yellow',
+          exampleIpa: '/ˈjel.oʊ/',
+          exampleVi: 'Màu vàng',
+          exampleIcon: '💛'
+        },
+        'Z': {
+          letter: 'Z',
+          speech: 'Z.',
+          ipa: '/ziː/',
+          vi: 'di/dét',
+          name: 'zee',
+          phonicsIpa: '/z/',
+          phonicsViShort: 'dờ (răng khép rung thanh)',
+          phonicsVi: 'Gần giống âm "dờ" rung mạnh (khép răng xì rung thanh quản)',
+          phonicsReadingGuide: 'Khép hai hàm răng lại tương tự âm /s/, nhưng phải làm rung thật mạnh dây thanh quản tạo tiếng xì rung rền: zzz...',
+          phonicsVietnameseComparison: 'Gần giống âm "dờ" miền Bắc tiếng Việt (như trong "da", "dễ") nhưng xì rung răng mạnh mẽ hơn.',
+          phonicsSpeech: 'zuh',
+          vietnameseSpeech: 'dờ',
+          example: 'Zoo',
+          exampleIpa: '/zuː/',
+          exampleVi: 'Sở thú',
+          exampleIcon: '🦓'
+        }
+      };
+
+      // Play authentic Phonics sound with high clarity SpeechSynthesis
+      const playPhonicsSound = (ch, { onEnd, voice, rate = 0.88 } = {}) => {
+        if (!ch || typeof window === 'undefined') {
+          if (onEnd) onEnd();
+          return null;
+        }
+        const uppercase = ch.toUpperCase();
+        const data = ALPHABET_DATA[uppercase];
+        if (!data) {
+          if (onEnd) onEnd();
+          return null;
+        }
+
+        if ('speechSynthesis' in window) {
+          try {
+            window.speechSynthesis.cancel();
+            const text = data.phonicsSpeech || ch.toLowerCase();
+            const utt = new SpeechSynthesisUtterance(text);
+            utt.lang = 'en-US';
+            utt.rate = rate;
+            if (voice) utt.voice = voice;
+
+            let finished = false;
+            const complete = () => {
+              if (finished) return;
+              finished = true;
+              if (onEnd) onEnd();
+            };
+
+            utt.onend = complete;
+            utt.onerror = complete;
+
+            if (window.speechSynthesis.paused) window.speechSynthesis.resume();
+            window.speechSynthesis.speak(utt);
+            return null;
+          } catch (e) {
+            if (onEnd) onEnd();
+            return null;
+          }
+        } else {
+          if (onEnd) onEnd();
+          return null;
+        }
+      };
+
+      // Play corresponding Vietnamese phonetic sound for pedagogical comparison
+      const playVietnameseSound = (ch, { onEnd } = {}) => {
+        if (!ch || typeof window === 'undefined') {
+          if (onEnd) onEnd();
+          return;
+        }
+        const uppercase = ch.toUpperCase();
+        const data = ALPHABET_DATA[uppercase];
+        if (!data || !('speechSynthesis' in window)) {
+          if (onEnd) onEnd();
+          return;
+        }
+        try {
+          window.speechSynthesis.cancel();
+          const text = data.vietnameseSpeech || data.phonicsViShort || data.vi;
+          const utt = new SpeechSynthesisUtterance(text);
+          utt.lang = 'vi-VN';
+          utt.rate = 0.9;
+
+          const voices = window.speechSynthesis.getVoices();
+          const viVoice = voices.find(v => v.lang && (v.lang.toLowerCase().startsWith('vi') || v.lang.includes('VIE')));
+          if (viVoice) utt.voice = viVoice;
+
+          let finished = false;
+          const complete = () => {
+            if (finished) return;
+            finished = true;
+            if (onEnd) onEnd();
+          };
+
+          utt.onend = complete;
+          utt.onerror = complete;
+
+          if (window.speechSynthesis.paused) window.speechSynthesis.resume();
+          window.speechSynthesis.speak(utt);
+        } catch (e) {
+          if (onEnd) onEnd();
+        }
+      };
+
+      // --- Custom Hook: Web Speech Synthesis with Word Gap & Spelling Controller ---
+      // Retain active utterances globally to prevent garbage collection bug in Chromium
+      if (typeof window !== 'undefined' && !window.__activeSpeechUtterances) {
+        window.__activeSpeechUtterances = new Set();
+      }
+
+      const useSpeechSynthesis = () => {
+        const [isSpeaking, setIsSpeaking] = useState(false);
+        const [voices, setVoices] = useState([]);
+        const timerSetRef = useRef(new Set());
+        const activeUtteranceRef = useRef(null);
+        const activeAudioRef = useRef(null);
+        const isCancelledRef = useRef(false);
+
+        const safeTimeout = useCallback((fn, delay) => {
+          const id = setTimeout(() => {
+            timerSetRef.current.delete(id);
+            if (!isCancelledRef.current) fn();
+          }, delay);
+          timerSetRef.current.add(id);
+          return id;
+        }, []);
+
+        const clearAllTimers = useCallback(() => {
+          timerSetRef.current.forEach(id => clearTimeout(id));
+          timerSetRef.current.clear();
+        }, []);
+
+        const updateVoices = useCallback(() => {
+          if ('speechSynthesis' in window) {
+            const availableVoices = window.speechSynthesis.getVoices();
+            const englishVoices = availableVoices.filter(v => v.lang && v.lang.toLowerCase().startsWith('en'));
+            setVoices(englishVoices.length > 0 ? englishVoices : availableVoices);
+          }
+        }, []);
+
+        useEffect(() => {
+          if ('speechSynthesis' in window) {
+            updateVoices();
+            window.speechSynthesis.onvoiceschanged = updateVoices;
+            return () => {
+              if (window.speechSynthesis) window.speechSynthesis.onvoiceschanged = null;
+            };
+          }
+        }, [updateVoices]);
+
+        const cancel = useCallback(() => {
+          isCancelledRef.current = true;
+          clearAllTimers();
+          if (activeAudioRef.current) {
+            try {
+              activeAudioRef.current.pause();
+              activeAudioRef.current.currentTime = 0;
+            } catch (e) {}
+            activeAudioRef.current = null;
+          }
+          if (window.__activeSpeechUtterances) {
+            window.__activeSpeechUtterances.clear();
+          }
+          if (activeUtteranceRef.current) {
+            activeUtteranceRef.current.onstart = null;
+            activeUtteranceRef.current.onend = null;
+            activeUtteranceRef.current.onerror = null;
+            activeUtteranceRef.current = null;
+          }
+          if ('speechSynthesis' in window) {
+            window.speechSynthesis.cancel();
+            if (window.speechSynthesis.paused) {
+              window.speechSynthesis.resume();
+            }
+          }
+          setIsSpeaking(false);
+        }, [clearAllTimers]);
+
+        useEffect(() => {
+          return () => cancel();
+        }, [cancel]);
+
+        // Speak natural whole word or sentence
+        const speakWord = useCallback((text, options = {}) => {
+          const wasSpeaking = typeof window !== 'undefined' && 'speechSynthesis' in window && window.speechSynthesis.speaking;
+          cancel();
+          isCancelledRef.current = false;
+          if (!('speechSynthesis' in window) || !text) {
+            if (options.onEnd) options.onEnd();
+            return;
+          }
+          const utterance = new SpeechSynthesisUtterance(text);
+          utterance.lang = 'en-US';
+          utterance.rate = options.rate || 0.95;
+          if (options.voice) utterance.voice = options.voice;
+
+          utterance.onstart = () => setIsSpeaking(true);
+          const handleDone = () => {
+            setIsSpeaking(false);
+            if (window.__activeSpeechUtterances) window.__activeSpeechUtterances.delete(utterance);
+            activeUtteranceRef.current = null;
+            if (options.onEnd) options.onEnd();
+          };
+          utterance.onend = handleDone;
+          utterance.onerror = handleDone;
+
+          activeUtteranceRef.current = utterance;
+          if (window.__activeSpeechUtterances) window.__activeSpeechUtterances.add(utterance);
+
+          const startDelay = wasSpeaking ? 20 : 0;
+          safeTimeout(() => {
+            if (isCancelledRef.current) return;
+            if (window.speechSynthesis.paused) window.speechSynthesis.resume();
+            window.speechSynthesis.speak(utterance);
+          }, startDelay);
+        }, [cancel, safeTimeout]);
+
+        // Speak single letter accurately according to Alphabet Name or Phonics
+        const speakLetter = useCallback((char, options = {}) => {
+          if (!char || typeof window === 'undefined') return;
+          const uppercaseChar = char.toUpperCase();
+          const letterData = ALPHABET_DATA[uppercaseChar];
+
+          if (options.mode === 'phonics') {
+            // Authentic high-fidelity MP3 phonics audio with speech synthesis fallback
+            if (activeAudioRef.current) {
+              try {
+                activeAudioRef.current.pause();
+                activeAudioRef.current.currentTime = 0;
+              } catch(e) {}
+              activeAudioRef.current = null;
+            }
+            const audio = playPhonicsSound(uppercaseChar, {
+              onEnd: () => {
+                if (activeAudioRef.current === audio) activeAudioRef.current = null;
+                if (options.onEnd) options.onEnd();
+              },
+              voice: options.voice,
+              rate: options.rate
+            });
+            activeAudioRef.current = audio;
+            return audio;
+          } else {
+            // Alphabet letter name (A, B, C...)
+            if (!('speechSynthesis' in window)) {
+              if (options.onEnd) options.onEnd();
+              return;
+            }
+            const spokenText = letterData ? letterData.speech : uppercaseChar;
+            const utterance = new SpeechSynthesisUtterance(spokenText);
+            utterance.lang = 'en-US';
+            utterance.rate = options.rate || 0.95;
+            if (options.voice) utterance.voice = options.voice;
+            if (options.onEnd) {
+              utterance.onend = options.onEnd;
+              utterance.onerror = options.onEnd;
+            }
+            if (window.speechSynthesis.paused) window.speechSynthesis.resume();
+            window.speechSynthesis.speak(utterance);
+          }
+        }, []);
+
+        // Letter-by-letter spelling with audio gap between words
+        const spellVocabulary = useCallback((vocabularyText, options = {}) => {
+          const wasSpeaking = typeof window !== 'undefined' && 'speechSynthesis' in window && window.speechSynthesis.speaking;
+          cancel();
+          isCancelledRef.current = false;
+          setIsSpeaking(true);
+
+          const {
+            voice = null,
+            slow = false,
+            speed = (slow ? 'slow' : 'normal'),
+            mode = 'alphabet', // 'alphabet' | 'phonics'
+            wordGapDuration = null,
+            onLetterHighlight = null,
+            onWordGap = null,
+            onEnd = null,
+          } = options;
+
+          const actualSpeed = options.speed || (options.slow ? 'slow' : 'normal');
+
+          if (!vocabularyText || !('speechSynthesis' in window)) {
+            setIsSpeaking(false);
+            if (onEnd) onEnd();
+            return;
+          }
+
+          // Clean words
+          const cleanText = vocabularyText.trim().toUpperCase();
+          const words = cleanText.split(/\s+/).filter(Boolean);
+
+          if (words.length === 0) {
+            setIsSpeaking(false);
+            if (onEnd) onEnd();
+            return;
+          }
+
+          // Speed configurations
+          let letterRate = 1.02;
+          let pauseAfterLetter = 150;
+          let calculatedWordGap = 600;
+          let finalRate = 0.95;
+          let finalDelay = 180;
+          let maxLetterSafety = 1400;
+
+          if (actualSpeed === 'fast') {
+            letterRate = 1.25;
+            pauseAfterLetter = 45;
+            calculatedWordGap = 300;
+            finalRate = 1.10;
+            finalDelay = 120;
+            maxLetterSafety = 950;
+          } else if (actualSpeed === 'slow') {
+            letterRate = 0.82;
+            pauseAfterLetter = 360;
+            calculatedWordGap = 850;
+            finalRate = 0.85;
+            finalDelay = 260;
+            maxLetterSafety = 2200;
+          }
+
+          const effectiveWordGap = wordGapDuration !== null ? wordGapDuration : calculatedWordGap;
+
+          // Build sequence of steps: letters and gaps
+          const steps = [];
+          let gIdx = 0;
+          words.forEach((word, wIdx) => {
+            word.split('').forEach((char, cIdx) => {
+              steps.push({
+                type: 'letter',
+                char: char,
+                wordIndex: wIdx,
+                charIndex: cIdx,
+                globalIndex: gIdx++,
+              });
+            });
+            if (wIdx < words.length - 1) {
+              steps.push({
+                type: 'word_gap',
+                wordIndex: wIdx,
+              });
+            }
+          });
+
+          // Pronounce final whole word or phrase
+          const speakFinalVocabulary = () => {
+            if (onWordGap) onWordGap(false);
+            if (onLetterHighlight) onLetterHighlight(-1, -1, -1);
+
+            safeTimeout(() => {
+              if (isCancelledRef.current) return;
+              const finalUtterance = new SpeechSynthesisUtterance(vocabularyText);
+              finalUtterance.lang = 'en-US';
+              finalUtterance.rate = finalRate;
+              if (voice) finalUtterance.voice = voice;
+              activeUtteranceRef.current = finalUtterance;
+              if (window.__activeSpeechUtterances) window.__activeSpeechUtterances.add(finalUtterance);
+
+              let finished = false;
+              const finish = () => {
+                if (finished) return;
+                finished = true;
+                if (window.__activeSpeechUtterances) window.__activeSpeechUtterances.delete(finalUtterance);
+                activeUtteranceRef.current = null;
+                setIsSpeaking(false);
+                if (onEnd) onEnd();
+              };
+
+              finalUtterance.onend = finish;
+              finalUtterance.onerror = finish;
+              safeTimeout(finish, 3500);
+
+              if (window.speechSynthesis.paused) window.speechSynthesis.resume();
+              window.speechSynthesis.speak(finalUtterance);
+            }, finalDelay);
+          };
+
+          let currentStepIdx = 0;
+          let stepSafetyTimer = null;
+
+          const executeNextStep = () => {
+            if (isCancelledRef.current) return;
+
+            if (currentStepIdx >= steps.length) {
+              speakFinalVocabulary();
+              return;
+            }
+
+            const step = steps[currentStepIdx];
+            currentStepIdx++;
+
+            if (step.type === 'letter') {
+              if (onWordGap) onWordGap(false);
+
+              const uppercaseChar = step.char.toUpperCase();
+              const lowercaseChar = step.char.toLowerCase();
+              const letterData = ALPHABET_DATA[uppercaseChar];
+
+              let highlighted = false;
+              const highlightNow = () => {
+                if (highlighted || isCancelledRef.current) return;
+                highlighted = true;
+                if (onLetterHighlight) {
+                  onLetterHighlight(step.wordIndex, step.charIndex, step.globalIndex);
+                }
+              };
+
+              let stepDone = false;
+              const advance = () => {
+                if (stepDone || isCancelledRef.current) return;
+                stepDone = true;
+                if (stepSafetyTimer) {
+                  clearTimeout(stepSafetyTimer);
+                  timerSetRef.current.delete(stepSafetyTimer);
+                  stepSafetyTimer = null;
+                }
+                if (activeAudioRef.current) {
+                  activeAudioRef.current = null;
+                }
+
+                safeTimeout(() => {
+                  if (!isCancelledRef.current) {
+                    executeNextStep();
+                  }
+                }, pauseAfterLetter);
+              };
+
+              stepSafetyTimer = safeTimeout(() => {
+                highlightNow();
+                advance();
+              }, maxLetterSafety);
+
+              if (mode === 'phonics') {
+                // Phonics Mode: Play authentic high-fidelity audio with speech synthesis fallback
+                highlightNow();
+                const audio = playPhonicsSound(uppercaseChar, {
+                  onEnd: () => {
+                    advance();
+                  },
+                  voice: voice,
+                  rate: letterRate
+                });
+                activeAudioRef.current = audio;
+              } else {
+                // Alphabet Letter Name Mode: SpeechSynthesis
+                const spokenLetterName = letterData ? letterData.speech : uppercaseChar;
+                const letterUtterance = new SpeechSynthesisUtterance(spokenLetterName);
+                letterUtterance.lang = 'en-US';
+                letterUtterance.rate = letterRate;
+                if (voice) letterUtterance.voice = voice;
+
+                activeUtteranceRef.current = letterUtterance;
+                if (window.__activeSpeechUtterances) window.__activeSpeechUtterances.add(letterUtterance);
+
+                letterUtterance.onstart = highlightNow;
+
+                const speechAdvance = () => {
+                  if (window.__activeSpeechUtterances) window.__activeSpeechUtterances.delete(letterUtterance);
+                  activeUtteranceRef.current = null;
+                  advance();
+                };
+
+                letterUtterance.onend = speechAdvance;
+                letterUtterance.onerror = (e) => {
+                  if (isCancelledRef.current) return;
+                  if (e && (e.error === 'canceled' || e.error === 'interrupted')) return;
+                  speechAdvance();
+                };
+
+                // Ensure instant visual synchronization
+                highlightNow();
+                if (window.speechSynthesis.paused) window.speechSynthesis.resume();
+                window.speechSynthesis.speak(letterUtterance);
+              }
+            } else if (step.type === 'word_gap') {
+              if (onLetterHighlight) onLetterHighlight(-1, -1, -1);
+              if (onWordGap) onWordGap(true);
+              playSound('gap');
+
+              safeTimeout(() => {
+                if (isCancelledRef.current) return;
+                if (onWordGap) onWordGap(false);
+                executeNextStep();
+              }, effectiveWordGap);
+            }
+          };
+
+          const startupDelay = wasSpeaking ? 20 : 0;
+          safeTimeout(() => {
+            if (!isCancelledRef.current) {
+              if (window.speechSynthesis.paused) window.speechSynthesis.resume();
+              executeNextStep();
+            }
+          }, startupDelay);
+        }, [cancel, safeTimeout]);
+
+        return { speakWord, speakLetter, spellVocabulary, cancel, isSpeaking, voices };
+      };
+
+      // --- Flexible Vocabulary Parser for Topic Editor ---
+      const parseVocabularyInput = (rawText) => {
+        if (!rawText || typeof rawText !== 'string') return [];
+        const lines = rawText.split(/\r?\n/);
+        const list = [];
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+
+          let en = trimmed;
+          let vi = '';
+
+          if (trimmed.includes('|')) {
+            const parts = trimmed.split('|');
+            en = parts[0].trim();
+            vi = parts.slice(1).join('|').trim();
+          } else if (trimmed.includes('\t')) {
+            const parts = trimmed.split('\t');
+            en = parts[0].trim();
+            vi = parts.slice(1).join(' ').trim();
+          } else if (/\s+-\s+/.test(trimmed)) {
+            const parts = trimmed.split(/\s+-\s+/);
+            en = parts[0].trim();
+            vi = parts.slice(1).join(' - ').trim();
+          } else if (/\s*:\s*/.test(trimmed)) {
+            const parts = trimmed.split(/\s*:\s*/);
+            en = parts[0].trim();
+            vi = parts.slice(1).join(' : ').trim();
+          }
+
+          // Strip line numbers e.g. "1. ", "1) "
+          en = en.replace(/^(\d+[\.\)\-:]\s*|[•\-\*]\s*|\[\d+\]\s*)/i, '').trim();
+
+          // Keep clean letters, spaces, hyphens
+          en = en.replace(/[^a-zA-Z\s\-']/g, '').trim();
+          if (en.length >= 2) {
+            list.push({ en: en.toLowerCase(), vi: vi.trim() });
+          }
+        }
+        return list;
+      };
+
+      const SAMPLE_VOCABULARY_TEXT = `table tennis | Bóng bàn 🏓
+football | Bóng đá ⚽
+swimming pool | Hồ bơi 🏊
+martial arts | Võ thuật 🥋
+roller skates | Giày trượt patin 🛼
+stomach ache | Đau bụng 🤢
+sore throat | Đau họng 🤒
+orange juice | Nước cam 🍊
+ice cream | Kem 🍦
+high school | Trường cấp ba 🏫`;
+
+      // --- Screen 1: StartScreen ---
+      const StartScreen = ({ onStart, onOpenSoundboard }) => {
+        const [name, setName] = useState('');
+        const [errorMessage, setErrorMessage] = useState('');
+
+        const handleStartClick = () => {
+          if (name.trim()) {
+            onStart(name.trim());
+          } else {
+            setErrorMessage('Vui lòng nhập tên của bạn để bắt đầu!');
+          }
+        };
+
+        const handleKeyDown = (e) => {
+          if (e.key === 'Enter') handleStartClick();
+        };
+
+        return React.createElement('div', { className: "flex flex-col items-center gap-4 animate-fade-in max-w-md mx-auto" },
+          React.createElement('div', { className: "text-center" },
+            React.createElement('span', { className: "text-5xl sm:text-6xl block mb-2" }, "🎧 🔤"),
+            React.createElement('p', { className: "text-base sm:text-lg text-slate-600 font-medium leading-relaxed" },
+              "Luyện nghe cách đánh vần từng chữ cái tiếng Anh và sắp xếp các kí tự thành từ vựng hoàn chỉnh!"
+            )
+          ),
+          React.createElement('div', { className: "w-full flex flex-col gap-2" },
+            React.createElement('input', {
+              type: "text",
+              value: name,
+              onChange: (e) => {
+                setName(e.target.value);
+                if (errorMessage) setErrorMessage('');
+              },
+              onKeyDown: handleKeyDown,
+              placeholder: "Nhập tên của bạn...",
+              className: "w-full text-lg sm:text-xl p-3.5 px-5 rounded-2xl border-2 border-purple-300 text-center focus:outline-none focus:ring-4 focus:ring-purple-200 transition-all shadow-inner bg-white font-bold text-slate-800"
+            }),
+            errorMessage && React.createElement('p', { className: "text-rose-600 font-bold text-sm text-center" }, errorMessage)
+          ),
+          React.createElement('button', {
+            onClick: handleStartClick,
+            className: "w-full py-3.5 sm:py-4 px-8 text-xl font-black rounded-2xl bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 active:translate-y-0 transition-all cursor-pointer border-2 border-emerald-400"
+          }, "Bắt đầu học ngay ▶"),
+          onOpenSoundboard &&
+            React.createElement('button', {
+              type: "button",
+              onClick: onOpenSoundboard,
+              className: "w-full py-3 px-5 text-sm sm:text-base font-extrabold rounded-2xl bg-purple-100 hover:bg-purple-200 active:bg-purple-300 text-purple-900 border-2 border-purple-300 shadow-xs transition-all cursor-pointer flex items-center justify-center gap-2"
+            },
+              React.createElement('span', { className: "text-lg" }, "📖"),
+              React.createElement('span', null, "Bảng âm 26 chữ cái chuẩn quốc tế (A - Z)")
+            )
+        );
+      };
+
+      // --- Screen 2: TopicSelectionScreen ---
+      const topicGradients = [
+        'from-sky-500 to-indigo-600',
+        'from-emerald-500 to-teal-600',
+        'from-amber-500 to-orange-600',
+        'from-purple-500 to-violet-600',
+        'from-rose-500 to-pink-600',
+        'from-cyan-500 to-blue-600',
+      ];
+
+      const TopicSelectionScreen = ({
+        presetTopics,
+        customTopics,
+        onSelectTopic,
+        onCreateTopic,
+        onEditTopic,
+        onDeleteTopic,
+        onOpenSoundboard,
+      }) => {
+        const customTopicNames = Object.keys(customTopics || {});
+        const presetTopicNames = Object.keys(presetTopics || {});
+
+        return React.createElement('div', { className: "flex flex-col items-center gap-5 w-full animate-fade-in" },
+          React.createElement('div', { className: "text-center max-w-xl" },
+            React.createElement('h2', { className: "text-2xl sm:text-3xl font-extrabold text-slate-800" }, "Chọn chủ đề bài tập"),
+            React.createElement('p', { className: "text-sm sm:text-base text-slate-500 mt-1" },
+              "Nghe đánh vần từng chữ cái, nhận biết khoảng cách âm thanh giữa các từ ghép và sắp xếp hoàn chỉnh"
+            )
+          ),
+
+          // Soundboard & Alphabet Guide Quick Access
+          React.createElement('div', { className: "w-full max-w-2xl flex flex-col sm:flex-row items-center justify-between gap-3 bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-300/80 p-3.5 sm:p-4 rounded-2xl shadow-sm text-left" },
+            React.createElement('div', { className: "flex items-center gap-3" },
+              React.createElement('span', { className: "text-3xl sm:text-4xl shrink-0" }, "📖"),
+              React.createElement('div', null,
+                React.createElement('div', { className: "font-black text-amber-950 text-base sm:text-lg leading-snug" }, "Bảng âm 26 chữ cái chuẩn quốc tế (A - Z)"),
+                React.createElement('div', { className: "text-xs sm:text-sm text-amber-800 font-semibold mt-0.5" }, "Nghe phát âm chuẩn tên chữ cái & âm Phonics với ký hiệu phiên âm quốc tế IPA")
+              )
+            ),
+            React.createElement('button', {
+              type: "button",
+              onClick: onOpenSoundboard,
+              className: "w-full sm:w-auto px-5 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 active:scale-95 text-slate-900 font-black text-xs sm:text-sm rounded-xl shadow-md cursor-pointer transition-all shrink-0 flex items-center justify-center gap-2"
+            },
+              React.createElement('span', null, "Tra cứu âm"),
+              React.createElement('span', null, "🔊")
+            )
+          ),
+
+          // Create New Exercise Button
+          React.createElement('div', { className: "w-full max-w-2xl" },
+            React.createElement('button', {
+              onClick: onCreateTopic,
+              className: "w-full p-4 bg-gradient-to-r from-purple-600 via-violet-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-extrabold text-lg sm:text-xl rounded-2xl shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 active:translate-y-0 transition-all cursor-pointer flex items-center justify-center gap-3 border-2 border-purple-300/40"
+            },
+              React.createElement('span', { className: "bg-white/25 rounded-full w-9 h-9 flex items-center justify-center text-2xl font-black" }, "+"),
+              React.createElement('div', { className: "text-left" },
+                React.createElement('div', { className: "leading-tight" }, "Tạo bài tập từ vựng mới"),
+                React.createElement('div', { className: "text-xs font-normal text-purple-100 mt-0.5" },
+                  "Nhập hoặc dán từ đơn hay cụm từ ghép — app tự động tạo bài tập đánh vần chuẩn xác!"
+                )
+              )
+            )
+          ),
+
+          // Custom Topics
+          customTopicNames.length > 0 && React.createElement('div', { className: "w-full max-w-2xl text-left" },
+            React.createElement('div', { className: "flex items-center justify-between mb-3" },
+              React.createElement('h3', { className: "text-lg sm:text-xl font-bold text-purple-900 flex items-center gap-2" },
+                React.createElement('span', null, "⭐"),
+                React.createElement('span', null, "Chủ đề của bạn"),
+                React.createElement('span', { className: "text-xs font-bold bg-purple-200 text-purple-800 px-2.5 py-0.5 rounded-full" }, `${customTopicNames.length}`)
+              )
+            ),
+            React.createElement('div', { className: "grid grid-cols-1 md:grid-cols-2 gap-4" },
+              customTopicNames.map((topic) => {
+                const count = (customTopics[topic] || []).length;
+                return React.createElement('div', {
+                  key: topic,
+                  className: "bg-gradient-to-br from-violet-600 to-purple-700 rounded-2xl p-4 text-white shadow-lg hover:shadow-xl transition-all transform hover:-translate-y-1 flex flex-col justify-between"
+                },
+                  React.createElement('div', {
+                    onClick: () => onSelectTopic(topic),
+                    className: "cursor-pointer flex-1"
+                  },
+                    React.createElement('div', { className: "flex items-center justify-between gap-2" },
+                      React.createElement('span', { className: "text-[11px] font-bold uppercase tracking-wider bg-white/20 px-2 py-0.5 rounded-full" }, "Tự tạo"),
+                      React.createElement('span', { className: "text-xs text-violet-200 font-semibold" }, `${count} từ vựng`)
+                    ),
+                    React.createElement('h4', { className: "text-lg sm:text-xl font-bold mt-2 mb-3 leading-snug line-clamp-2" }, topic)
+                  ),
+                  React.createElement('div', { className: "flex items-center justify-between pt-2 border-t border-white/20 mt-2" },
+                    React.createElement('button', {
+                      onClick: () => onSelectTopic(topic),
+                      className: "text-xs font-bold bg-white text-violet-800 hover:bg-violet-50 px-3 py-1.5 rounded-xl transition cursor-pointer flex items-center gap-1 shadow-sm"
+                    }, "Vào học ▶"),
+                    React.createElement('div', { className: "flex items-center gap-1.5" },
+                      React.createElement('button', {
+                        onClick: (e) => { e.stopPropagation(); onEditTopic(topic); },
+                        className: "p-1.5 px-2.5 rounded-lg bg-white/20 hover:bg-white/30 text-white transition cursor-pointer text-xs font-semibold"
+                      }, "✏️ Sửa"),
+                      React.createElement('button', {
+                        onClick: (e) => { e.stopPropagation(); onDeleteTopic(topic); },
+                        className: "p-1.5 px-2.5 rounded-lg bg-rose-500/80 hover:bg-rose-600 text-white transition cursor-pointer text-xs font-semibold"
+                      }, "🗑️ Xóa")
+                    )
+                  )
+                );
+              })
+            )
+          ),
+
+          // Preset Topics
+          React.createElement('div', { className: "w-full max-w-2xl text-left" },
+            React.createElement('h3', { className: "text-lg sm:text-xl font-bold text-slate-700 mb-3 flex items-center gap-2" },
+              React.createElement('span', null, "📚"),
+              React.createElement('span', null, "Chủ đề từ vựng có sẵn")
+            ),
+            React.createElement('div', { className: "grid grid-cols-1 md:grid-cols-2 gap-4" },
+              presetTopicNames.map((topic, index) => {
+                const count = (presetTopics[topic] || []).length;
+                return React.createElement('button', {
+                  key: topic,
+                  onClick: () => onSelectTopic(topic),
+                  className: `p-4 text-left text-white font-bold rounded-2xl transform hover:-translate-y-1 transition-all shadow-lg hover:shadow-xl bg-gradient-to-br ${topicGradients[index % topicGradients.length]} cursor-pointer flex flex-col justify-between min-h-[96px]`
+                },
+                  React.createElement('div', { className: "flex items-center justify-between w-full text-xs text-white/80" },
+                    React.createElement('span', { className: "bg-black/15 px-2 py-0.5 rounded-full" }, "Mặc định"),
+                    React.createElement('span', null, `${count} từ vựng`)
+                  ),
+                  React.createElement('span', { className: "text-lg sm:text-xl font-bold mt-2" }, topic)
+                );
+              })
+            )
+          )
+        );
+      };
+
+      // --- Screen 3: TopicEditorScreen (Create & Edit Vocabulary Lists) ---
+      const TopicEditorScreen = ({
+        initialTopicName,
+        initialSentences,
+        existingTopicNames,
+        onSave,
+        onCancel,
+      }) => {
+        const isEditing = Boolean(initialTopicName);
+        const [topicName, setTopicName] = useState(initialTopicName || '');
+        const [rawText, setRawText] = useState(() => {
+          if (initialSentences && initialSentences.length > 0) {
+            return initialSentences.map(s => (s.vi ? `${s.en} | ${s.vi}` : s.en)).join('\n');
+          }
+          return '';
+        });
+        const [errorMessage, setErrorMessage] = useState(null);
+        const { spellVocabulary, isSpeaking, cancel } = useSpeechSynthesis();
+
+        const detectedVocabulary = useMemo(() => {
+          return parseVocabularyInput(rawText);
+        }, [rawText]);
+
+        const handlePasteSample = () => {
+          setRawText(SAMPLE_VOCABULARY_TEXT);
+          if (!topicName.trim()) {
+            setTopicName("Luyện đánh vần từ vựng thông dụng");
+          }
+          setErrorMessage(null);
+        };
+
+        const handleTestSpelling = (item) => {
+          cancel();
+          spellVocabulary(item.en, {
+            rate: 0.9,
+            wordGapDuration: 900,
+          });
+        };
+
+        const handleSaveClick = (playImmediately) => {
+          if (detectedVocabulary.length === 0) {
+            setErrorMessage('Vui lòng nhập hoặc dán ít nhất một từ vựng tiếng Anh (từ đơn hoặc từ ghép có từ 2 ký tự trở lên).');
+            return;
+          }
+
+          let finalName = topicName.trim();
+          if (!finalName) {
+            const firstWord = detectedVocabulary[0].en;
+            finalName = `Từ vựng: ${firstWord} và các từ khác`;
+          }
+
+          if (!isEditing || finalName !== initialTopicName) {
+            let uniqueName = finalName;
+            let counter = 1;
+            while (existingTopicNames.some(n => n.toLowerCase() === uniqueName.toLowerCase() && n !== initialTopicName)) {
+              counter++;
+              uniqueName = `${finalName} (${counter})`;
+            }
+            finalName = uniqueName;
+          }
+
+          setErrorMessage(null);
+          onSave(finalName, detectedVocabulary, playImmediately);
+        };
+
+        return React.createElement('div', { className: "flex flex-col items-center gap-5 w-full text-left animate-fade-in" },
+          // Top Navigation
+          React.createElement('div', { className: "w-full flex items-center justify-between border-b pb-3 border-slate-200" },
+            React.createElement('button', {
+              onClick: onCancel,
+              className: "flex items-center gap-1.5 text-sm font-bold text-slate-600 hover:text-purple-600 transition cursor-pointer py-1 px-3 rounded-lg hover:bg-slate-100"
+            }, "← Quay lại danh sách chủ đề"),
+            React.createElement('button', {
+              onClick: handlePasteSample,
+              className: "text-xs sm:text-sm font-semibold text-purple-700 hover:text-purple-900 bg-purple-50 hover:bg-purple-100 border border-purple-200 py-1.5 px-3 rounded-xl transition cursor-pointer flex items-center gap-1"
+            }, "✨ Dán danh sách từ mẫu")
+          ),
+
+          // Title & Description
+          React.createElement('div', { className: "w-full" },
+            React.createElement('h2', { className: "text-2xl sm:text-3xl font-extrabold text-slate-800" },
+              isEditing ? `Chỉnh sửa chủ đề: "${initialTopicName}"` : "Tạo bài tập đánh vần từ vựng mới"
+            ),
+            React.createElement('p', { className: "text-sm sm:text-base text-slate-600 mt-1" },
+              "Nhập danh sách từ vựng tiếng Anh. Đối với các từ có từ 2 từ trở lên (từ ghép như table tennis, stomach ache), app sẽ tự động tạo khoảng cách âm thanh và khoảng cách hiển thị!"
+            )
+          ),
+
+          // Error Message
+          errorMessage && React.createElement('div', { className: "w-full bg-red-50 border-2 border-red-300 text-red-700 p-3.5 rounded-2xl text-sm font-bold flex items-center gap-2 animate-shake" },
+            React.createElement('span', { className: "text-lg" }, "⚠️"),
+            React.createElement('span', null, errorMessage)
+          ),
+
+          // Main Textarea Input
+          React.createElement('div', { className: "w-full bg-white p-4 sm:p-5 rounded-2xl border-2 border-purple-300 shadow-sm flex flex-col gap-2" },
+            React.createElement('div', { className: "flex flex-wrap items-center justify-between gap-2 mb-1" },
+              React.createElement('label', { className: "text-sm sm:text-base font-bold text-slate-800 flex items-center gap-1.5" },
+                React.createElement('span', null, "✍️"),
+                React.createElement('span', null, "Nhập hoặc dán các từ vựng tiếng Anh (Mỗi dòng một từ/cụm từ): *")
+              ),
+              detectedVocabulary.length > 0 ?
+                React.createElement('span', { className: "text-xs sm:text-sm font-bold bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full flex items-center gap-1 shadow-sm" },
+                  React.createElement('span', null, "✓"),
+                  React.createElement('span', null, `Đã nhận diện ${detectedVocabulary.length} từ vựng`)
+                ) :
+                React.createElement('span', { className: "text-xs text-slate-400 font-medium" }, "Hỗ trợ từ đơn & từ ghép")
+            ),
+            React.createElement('textarea', {
+              rows: 7,
+              value: rawText,
+              onChange: (e) => {
+                setRawText(e.target.value);
+                if (errorMessage) setErrorMessage(null);
+              },
+              placeholder: `table tennis | Bóng bàn\nswimming | Bơi lội\nstomach ache | Đau bụng\nfootball | Bóng đá\norange juice | Nước cam\nroller skates | Giày patin`,
+              className: "w-full p-4 rounded-xl border-2 border-slate-300 focus:border-purple-500 focus:ring-2 focus:ring-purple-200 outline-none text-base font-medium text-slate-800 leading-relaxed font-sans"
+            }),
+            React.createElement('div', { className: "text-xs text-slate-500 flex flex-wrap items-center justify-between gap-2 mt-1" },
+              React.createElement('span', null, "💡 Có thể nhập nghĩa tiếng Việt sau dấu gạch đứng \"|\" hoặc dấu gạch ngang \"-\"."),
+              rawText.trim().length > 0 && React.createElement('button', {
+                type: "button",
+                onClick: () => { setRawText(''); setErrorMessage(null); },
+                className: "text-rose-600 hover:text-rose-800 font-semibold cursor-pointer underline text-xs"
+              }, "Xóa nội dung")
+            )
+          ),
+
+          // Topic Name
+          React.createElement('div', { className: "w-full bg-slate-50 p-4 rounded-2xl border border-slate-200" },
+            React.createElement('label', { className: "block text-sm font-bold text-slate-700 mb-1" },
+              "Tên chủ đề bài tập (Tùy chọn):"
+            ),
+            React.createElement('input', {
+              type: "text",
+              value: topicName,
+              onChange: (e) => setTopicName(e.target.value),
+              placeholder: "Ví dụ: Từ vựng Unit 2 RO7, Đồ dùng thể thao...",
+              className: "w-full p-3 px-4 rounded-xl border border-slate-300 focus:border-purple-500 focus:ring-1 focus:ring-purple-200 outline-none text-sm font-semibold text-slate-800 bg-white"
+            })
+          ),
+
+          // Live Preview of Detected Vocabulary
+          detectedVocabulary.length > 0 && React.createElement('div', { className: "w-full flex flex-col gap-2.5 animate-fade-in" },
+            React.createElement('div', { className: "flex items-center justify-between" },
+              React.createElement('h3', { className: "text-sm sm:text-base font-bold text-slate-700 flex items-center gap-1.5" },
+                React.createElement('span', null, "📋"),
+                React.createElement('span', null, "Xem trước từ vựng sẽ đưa vào bài tập:"),
+                React.createElement('span', { className: "text-xs bg-purple-100 text-purple-800 font-bold px-2 py-0.5 rounded-full" }, `${detectedVocabulary.length} từ`)
+              ),
+              React.createElement('span', { className: "text-xs text-slate-500" }, "Bấm 🔊 để nghe thử đánh vần & khoảng cách âm")
+            ),
+            React.createElement('div', { className: "max-h-60 overflow-y-auto space-y-2 pr-1" },
+              detectedVocabulary.map((item, index) => {
+                const words = item.en.trim().split(/\s+/);
+                const isMulti = words.length >= 2;
+                const charCount = item.en.replace(/\s+/g, '').length;
+
+                return React.createElement('div', {
+                  key: index,
+                  className: "p-3 bg-white rounded-xl border border-slate-200 shadow-sm flex items-center justify-between gap-3 hover:border-purple-300 transition"
+                },
+                  React.createElement('div', { className: "flex items-center gap-3 min-w-0" },
+                    React.createElement('span', { className: "text-xs font-bold bg-purple-100 text-purple-800 w-6 h-6 rounded-full flex items-center justify-center shrink-0" },
+                      `${index + 1}`
+                    ),
+                    React.createElement('div', { className: "min-w-0" },
+                      React.createElement('div', { className: "flex items-center gap-2 flex-wrap" },
+                        React.createElement('span', { className: "text-base font-extrabold text-slate-800 capitalize" }, item.en),
+                        isMulti ?
+                          React.createElement('span', { className: "text-[11px] font-bold bg-amber-100 text-amber-900 border border-amber-300 px-2 py-0.5 rounded-md" },
+                            `✨ ${words.length} từ (Có khoảng cách âm & hiển thị)`
+                          ) :
+                          React.createElement('span', { className: "text-[11px] font-bold bg-sky-100 text-sky-800 px-2 py-0.5 rounded-md" },
+                            "1 từ đơn"
+                          )
+                      ),
+                      item.vi && React.createElement('p', { className: "text-xs text-slate-500 italic mt-0.5 truncate" }, item.vi)
+                    )
+                  ),
+                  React.createElement('div', { className: "flex items-center gap-2 shrink-0" },
+                    React.createElement('span', { className: "text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md font-semibold hidden sm:inline" },
+                      `${charCount} chữ cái`
+                    ),
+                    React.createElement('button', {
+                      type: "button",
+                      onClick: () => handleTestSpelling(item),
+                      disabled: isSpeaking,
+                      title: "Nghe thử đánh vần",
+                      className: "p-1.5 px-3 rounded-lg bg-purple-50 hover:bg-purple-100 text-purple-700 text-xs font-bold transition cursor-pointer flex items-center gap-1 border border-purple-200"
+                    }, "🔊 Nghe đánh vần")
+                  )
+                );
+              })
+            )
+          ),
+
+          // Bottom Action Buttons
+          React.createElement('div', { className: "w-full flex flex-col sm:flex-row items-center justify-end gap-3 pt-3 border-t border-slate-200 mt-1" },
+            React.createElement('button', {
+              type: "button",
+              onClick: onCancel,
+              className: "w-full sm:w-auto py-3 px-5 text-slate-700 hover:bg-slate-100 font-bold rounded-xl transition cursor-pointer text-sm sm:text-base text-center"
+            }, "Hủy bỏ"),
+            React.createElement('button', {
+              type: "button",
+              onClick: () => handleSaveClick(false),
+              disabled: detectedVocabulary.length === 0,
+              className: "w-full sm:w-auto py-3 px-6 bg-slate-800 hover:bg-slate-900 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-bold rounded-xl shadow-md transition cursor-pointer text-sm sm:text-base text-center"
+            }, "Lưu vào danh sách"),
+            React.createElement('button', {
+              type: "button",
+              onClick: () => handleSaveClick(true),
+              disabled: detectedVocabulary.length === 0,
+              className: "w-full sm:w-auto py-3.5 px-7 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 disabled:from-slate-300 disabled:to-slate-400 disabled:cursor-not-allowed text-white font-extrabold rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 active:translate-y-0 transition cursor-pointer text-base sm:text-lg text-center flex items-center justify-center gap-2"
+            },
+              React.createElement('span', null, "Tạo bài tập & Bắt đầu học ngay"),
+              React.createElement('span', null, "▶")
+            )
+          )
+        );
+      };
+
+      // --- Component: Bảng âm 26 chữ cái chuẩn quốc tế (Alphabet & Phonics Soundboard) ---
+      const AlphabetSoundboardModal = ({
+        isOpen,
+        onClose,
+        voices = [],
+        currentMode = 'alphabet',
+        onModeChange
+      }) => {
+        const [mode, setMode] = useState(currentMode);
+        const [selectedDetailChar, setSelectedDetailChar] = useState('A');
+        const [activeChar, setActiveChar] = useState(null);
+        const [isAutoPlaying, setIsAutoPlaying] = useState(false);
+        const [selectedVoiceURI, setSelectedVoiceURI] = useState(null);
+        const autoPlayTimerRef = useRef(null);
+        const autoPlayIndexRef = useRef(0);
+
+        useEffect(() => {
+          setMode(currentMode);
+        }, [currentMode]);
+
+        const selectedVoice = useMemo(() => {
+          if (!voices || voices.length === 0) return null;
+          if (selectedVoiceURI) {
+            const found = voices.find(v => v.voiceURI === selectedVoiceURI);
+            if (found) return found;
+          }
+          const enVoices = voices.filter(v => v.lang && v.lang.toLowerCase().startsWith('en'));
+          const pool = enVoices.length > 0 ? enVoices : voices;
+          return pool.find(v => v.name.includes('Google US English')) ||
+                 pool.find(v => v.name.includes('Samantha')) ||
+                 pool.find(v => v.name.includes('Natural')) ||
+                 pool.find(v => v.default) ||
+                 pool[0];
+        }, [voices, selectedVoiceURI]);
+
+        const stopAutoPlay = useCallback(() => {
+          setIsAutoPlaying(false);
+          if (autoPlayTimerRef.current) {
+            clearTimeout(autoPlayTimerRef.current);
+            autoPlayTimerRef.current = null;
+          }
+          if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+            window.speechSynthesis.cancel();
+          }
+          setActiveChar(null);
+        }, []);
+
+        const playWordExample = useCallback((e, word) => {
+          if (e && e.stopPropagation) e.stopPropagation();
+          if (typeof window === 'undefined' || !('speechSynthesis' in window) || !word) return;
+          window.speechSynthesis.cancel();
+          const utterance = new SpeechSynthesisUtterance(word);
+          utterance.lang = 'en-US';
+          utterance.rate = 0.9;
+          if (selectedVoice) utterance.voice = selectedVoice;
+          if (window.speechSynthesis.paused) window.speechSynthesis.resume();
+          window.speechSynthesis.speak(utterance);
+        }, [selectedVoice]);
+
+        const playSingleChar = useCallback((ch, targetMode = mode) => {
+          if (typeof window === 'undefined') return;
+          stopAutoPlay();
+          setSelectedDetailChar(ch);
+          setActiveChar(ch);
+
+          const data = ALPHABET_DATA[ch];
+          if (targetMode === 'phonics') {
+            playPhonicsSound(ch, {
+              onEnd: () => {
+                setTimeout(() => {
+                  setActiveChar(prev => prev === ch ? null : prev);
+                }, 250);
+              },
+              voice: selectedVoice
+            });
+          } else {
+            if (!('speechSynthesis' in window)) {
+              setActiveChar(null);
+              return;
+            }
+            window.speechSynthesis.cancel();
+            const text = data?.speech || ch;
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = 'en-US';
+            utterance.rate = 0.95;
+            if (selectedVoice) utterance.voice = selectedVoice;
+
+            utterance.onend = () => {
+              setTimeout(() => {
+                setActiveChar(prev => prev === ch ? null : prev);
+              }, 200);
+            };
+            utterance.onerror = () => {
+              setActiveChar(null);
+            };
+
+            if (window.speechSynthesis.paused) window.speechSynthesis.resume();
+            window.speechSynthesis.speak(utterance);
+          }
+        }, [mode, selectedVoice, stopAutoPlay]);
+
+        const handleSelectMode = (newMode) => {
+          stopAutoPlay();
+          setMode(newMode);
+          if (onModeChange) onModeChange(newMode);
+        };
+
+        const handlePrevLetter = () => {
+          const letters = Object.keys(ALPHABET_DATA);
+          const currentIndex = letters.indexOf(selectedDetailChar);
+          const prevIndex = (currentIndex - 1 + letters.length) % letters.length;
+          playSingleChar(letters[prevIndex]);
+        };
+
+        const handleNextLetter = () => {
+          const letters = Object.keys(ALPHABET_DATA);
+          const currentIndex = letters.indexOf(selectedDetailChar);
+          const nextIndex = (currentIndex + 1) % letters.length;
+          playSingleChar(letters[nextIndex]);
+        };
+
+        const handleToggleAutoPlay = () => {
+          if (isAutoPlaying) {
+            stopAutoPlay();
+            return;
+          }
+          setIsAutoPlaying(true);
+          const letters = Object.keys(ALPHABET_DATA);
+          autoPlayIndexRef.current = 0;
+
+          const playNext = () => {
+            if (autoPlayIndexRef.current >= letters.length) {
+              stopAutoPlay();
+              return;
+            }
+            const currentLetter = letters[autoPlayIndexRef.current];
+            autoPlayIndexRef.current++;
+            setSelectedDetailChar(currentLetter);
+            setActiveChar(currentLetter);
+
+            const data = ALPHABET_DATA[currentLetter];
+            if (mode === 'phonics') {
+              playPhonicsSound(currentLetter, {
+                onEnd: () => {
+                  autoPlayTimerRef.current = setTimeout(playNext, 600);
+                },
+                voice: selectedVoice
+              });
+            } else {
+              if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+                const text = data?.speech || currentLetter;
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = 'en-US';
+                utterance.rate = 0.95;
+                if (selectedVoice) utterance.voice = selectedVoice;
+                utterance.onend = () => {
+                  autoPlayTimerRef.current = setTimeout(playNext, 600);
+                };
+                utterance.onerror = () => {
+                  autoPlayTimerRef.current = setTimeout(playNext, 600);
+                };
+                if (window.speechSynthesis.paused) window.speechSynthesis.resume();
+                window.speechSynthesis.speak(utterance);
+              } else {
+                autoPlayTimerRef.current = setTimeout(playNext, 600);
+              }
+            }
+          };
+
+          playNext();
+        };
+
+        const handleClose = () => {
+          stopAutoPlay();
+          if (onClose) onClose();
+        };
+
+        useEffect(() => {
+          return () => {
+            if (autoPlayTimerRef.current) clearTimeout(autoPlayTimerRef.current);
+          };
+        }, []);
+
+        if (!isOpen) return null;
+
+        const letters = Object.keys(ALPHABET_DATA);
+        const enVoices = voices.filter(v => v.lang && v.lang.toLowerCase().startsWith('en'));
+        const availableVoices = enVoices.length > 0 ? enVoices : voices;
+        const selectedDetailData = ALPHABET_DATA[selectedDetailChar] || ALPHABET_DATA['A'];
+
+        return React.createElement('div', {
+          className: "fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 overflow-y-auto animate-fade-in",
+          onClick: (e) => {
+            if (e.target === e.currentTarget) handleClose();
+          }
+        },
+          React.createElement('div', {
+            className: "bg-white rounded-3xl shadow-2xl border-2 border-purple-300 w-full max-w-4xl max-h-[94vh] flex flex-col overflow-hidden text-left"
+          },
+            // Header
+            React.createElement('div', { className: "bg-gradient-to-r from-purple-700 via-indigo-700 to-purple-800 text-white p-3.5 sm:p-4 flex items-center justify-between shadow-md shrink-0" },
+              React.createElement('div', null,
+                React.createElement('h3', { className: "text-base sm:text-xl font-black tracking-tight flex items-center gap-2" },
+                  React.createElement('span', null, "📖"),
+                  React.createElement('span', null, "BẢNG PHÁT ÂM 26 CHỮ CÁI & NGỮ ÂM PHONICS (A - Z)")
+                ),
+                React.createElement('p', { className: "text-purple-200 text-xs sm:text-sm font-semibold mt-0.5" },
+                  "Bấm vào âm bất kỳ để phóng to thẻ chi tiết, xem phiên âm IPA, cách đọc chuẩn và đối chiếu tiếng Việt"
+                )
+              ),
+              React.createElement('button', {
+                type: "button",
+                onClick: handleClose,
+                className: "w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 text-white font-black text-base flex items-center justify-center cursor-pointer transition-all shrink-0 ml-2"
+              }, "✕")
+            ),
+
+            // Controls bar
+            React.createElement('div', { className: "bg-purple-50/90 border-b border-purple-200 p-2.5 sm:p-3 flex flex-wrap items-center justify-between gap-2.5 shrink-0" },
+              // Mode switcher
+              React.createElement('div', { className: "flex items-center gap-1.5 bg-white p-1 rounded-2xl border border-purple-300 shadow-xs text-xs sm:text-sm font-extrabold" },
+                React.createElement('span', { className: "text-slate-500 px-1.5 hidden sm:inline text-xs" }, "Chế độ:"),
+                React.createElement('button', {
+                  type: "button",
+                  onClick: () => handleSelectMode('phonics'),
+                  className: `px-3 py-1.5 rounded-xl cursor-pointer transition-all flex items-center gap-1.5 ${
+                    mode === 'phonics' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-700 hover:bg-purple-100'
+                  }`
+                },
+                  React.createElement('span', null, "🗣️"),
+                  React.createElement('span', null, "Ngữ âm Phonics (/æ/, /b/...)")
+                ),
+                React.createElement('button', {
+                  type: "button",
+                  onClick: () => handleSelectMode('alphabet'),
+                  className: `px-3 py-1.5 rounded-xl cursor-pointer transition-all flex items-center gap-1.5 ${
+                    mode === 'alphabet' ? 'bg-purple-600 text-white shadow-xs' : 'text-slate-700 hover:bg-purple-100'
+                  }`
+                },
+                  React.createElement('span', null, "🔤"),
+                  React.createElement('span', null, "Tên chữ cái (A, B, C...)")
+                )
+              ),
+
+              // Action buttons & Voice selector
+              React.createElement('div', { className: "flex items-center gap-2" },
+                React.createElement('button', {
+                  type: "button",
+                  onClick: handleToggleAutoPlay,
+                  className: `px-3 py-1.5 rounded-xl font-extrabold text-xs sm:text-sm shadow-md cursor-pointer transition-all flex items-center gap-1.5 ${
+                    isAutoPlaying ?
+                      'bg-rose-600 hover:bg-rose-700 text-white animate-pulse' :
+                      'bg-emerald-600 hover:bg-emerald-700 text-white'
+                  }`
+                },
+                  React.createElement('span', null, isAutoPlaying ? "⏸" : "▶"),
+                  React.createElement('span', null, isAutoPlaying ? "Dừng đọc" : "Đọc toàn bộ A - Z")
+                ),
+
+                availableVoices.length > 0 &&
+                  React.createElement('select', {
+                    value: selectedVoiceURI || (selectedVoice?.voiceURI || ''),
+                    onChange: (e) => setSelectedVoiceURI(e.target.value),
+                    className: "bg-white border border-purple-300 text-slate-700 text-xs font-bold rounded-xl px-2.5 py-1.5 shadow-xs focus:ring-2 focus:ring-purple-400 focus:outline-none max-w-[140px] sm:max-w-[170px] truncate"
+                  },
+                    availableVoices.map(v =>
+                      React.createElement('option', { key: v.voiceURI, value: v.voiceURI },
+                        `${v.name.replace(/(Google|Microsoft|Apple)\s*/gi, '')} (${v.lang})`
+                      )
+                    )
+                  )
+              )
+            ),
+
+            // Main Scrollable Area containing Enlarged Detail Card & Letter Grid
+            React.createElement('div', { className: "p-3 sm:p-5 overflow-y-auto max-h-[66vh] bg-slate-50/60 flex flex-col gap-4" },
+              // 🔍 ENLARGED DETAIL CARD (Thẻ phóng to chi tiết âm & cách đọc)
+              selectedDetailData && React.createElement('div', {
+                className: "p-4 sm:p-5 rounded-3xl bg-gradient-to-br from-indigo-50/90 via-purple-50/90 to-amber-50/90 border-2 border-indigo-300 shadow-md flex flex-col gap-3 transition-all"
+              },
+                // Top line: Big Letter, IPA Badge, Mode Tag and Navigation
+                React.createElement('div', { className: "flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-indigo-200/80" },
+                  React.createElement('div', { className: "flex items-center gap-3" },
+                    // Big Letter Badge
+                    React.createElement('div', {
+                      className: "w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-tr from-purple-600 to-indigo-600 text-white shadow-lg flex items-center justify-center font-black tracking-tight shrink-0"
+                    },
+                      React.createElement('span', { className: "text-2xl sm:text-3xl" }, selectedDetailData.letter),
+                      React.createElement('span', { className: "text-lg sm:text-xl text-purple-200 ml-0.5 font-bold" }, selectedDetailData.letter.toLowerCase())
+                    ),
+                    // IPA Symbol & Phonetic Information
+                    React.createElement('div', null,
+                      React.createElement('div', { className: "flex items-center gap-2" },
+                        React.createElement('span', {
+                          className: "text-xl sm:text-2xl font-mono font-black text-indigo-800 bg-white px-3 py-0.5 rounded-xl border border-indigo-300 shadow-xs"
+                        }, mode === 'phonics' ? selectedDetailData.phonicsIpa : selectedDetailData.ipa),
+                        React.createElement('span', {
+                          className: "text-xs font-black uppercase px-2.5 py-1 rounded-lg bg-indigo-100 text-indigo-900 border border-indigo-200"
+                        }, mode === 'phonics' ? "Ngữ âm Phonics chuẩn" : "Tên chữ cái")
+                      ),
+                      React.createElement('div', { className: "text-xs font-bold text-slate-600 mt-1 flex items-center gap-1.5 flex-wrap" },
+                        React.createElement('span', null, "Tên chữ cái:"),
+                        React.createElement('strong', { className: "text-purple-700" }, `${selectedDetailData.name} (${selectedDetailData.vi})`),
+                        React.createElement('span', { className: "text-slate-400" }, "•"),
+                        React.createElement('span', null, "Phiên âm tên:"),
+                        React.createElement('code', { className: "text-indigo-600 font-bold font-mono" }, selectedDetailData.ipa)
+                      )
+                    )
+                  ),
+
+                  // Quick Letter Switcher (Prev/Next buttons)
+                  React.createElement('div', { className: "flex items-center gap-2 ml-auto" },
+                    React.createElement('button', {
+                      type: "button",
+                      onClick: handlePrevLetter,
+                      title: "Xem chữ cái trước",
+                      className: "px-3 py-1.5 rounded-xl bg-white hover:bg-purple-100 border border-purple-300 text-purple-800 font-black text-xs sm:text-sm flex items-center gap-1 cursor-pointer transition shadow-xs active:scale-95"
+                    },
+                      React.createElement('span', null, "◀"),
+                      React.createElement('span', { className: "hidden sm:inline" }, "Chữ trước")
+                    ),
+                    React.createElement('button', {
+                      type: "button",
+                      onClick: handleNextLetter,
+                      title: "Xem chữ cái kế tiếp",
+                      className: "px-3 py-1.5 rounded-xl bg-white hover:bg-purple-100 border border-purple-300 text-purple-800 font-black text-xs sm:text-sm flex items-center gap-1 cursor-pointer transition shadow-xs active:scale-95"
+                    },
+                      React.createElement('span', { className: "hidden sm:inline" }, "Chữ sau"),
+                      React.createElement('span', null, "▶")
+                    )
+                  )
+                ),
+
+                // Vietnamese Comparison Box (Directly answers user's question about similarities with Vietnamese)
+                React.createElement('div', {
+                  className: "bg-amber-100/90 border border-amber-300/90 rounded-2xl p-3 text-xs sm:text-sm text-amber-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 shadow-xs"
+                },
+                  React.createElement('div', { className: "flex items-start gap-2" },
+                    React.createElement('span', { className: "text-lg shrink-0" }, "🇻🇳"),
+                    React.createElement('div', null,
+                      React.createElement('span', { className: "font-black text-amber-950" }, "So sánh với âm tiếng Việt: "),
+                      React.createElement('span', { className: "font-bold text-amber-900" }, selectedDetailData.phonicsVietnameseComparison)
+                    )
+                  ),
+                  React.createElement('button', {
+                    type: "button",
+                    onClick: () => playVietnameseSound(selectedDetailChar),
+                    title: `Nghe cách đọc âm "${selectedDetailData.phonicsViShort}" tiếng Việt`,
+                    className: "shrink-0 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white font-extrabold rounded-xl text-xs flex items-center gap-1.5 shadow-xs cursor-pointer active:scale-95 transition"
+                  },
+                    React.createElement('span', null, "🔊"),
+                    React.createElement('span', null, `Đọc đối chiếu: "${selectedDetailData.phonicsViShort}"`)
+                  )
+                ),
+
+                // Detailed Reading Guide (Cách đặt lưỡi, môi, bật hơi)
+                React.createElement('div', { className: "bg-white/85 rounded-2xl p-3 border border-indigo-100 text-xs sm:text-sm text-slate-700" },
+                  React.createElement('div', { className: "flex items-center gap-1.5 font-black text-indigo-900 mb-1" },
+                    React.createElement('span', null, "👄"),
+                    React.createElement('span', null, "Khẩu hình & Cách phát âm chuẩn:")
+                  ),
+                  React.createElement('p', { className: "leading-relaxed text-slate-600 font-medium" },
+                    mode === 'phonics' ? selectedDetailData.phonicsReadingGuide : `Phát âm tên gọi chữ cái "${selectedDetailData.letter}" trong bảng chữ cái tiếng Anh là /${selectedDetailData.ipa.replace(/\//g, '')}/ (đọc tương tự "${selectedDetailData.vi}").`
+                  )
+                ),
+
+                // Audio Actions & Example Word
+                React.createElement('div', { className: "flex flex-wrap items-center justify-between gap-2.5 pt-1" },
+                  // Audio play buttons
+                  React.createElement('div', { className: "flex flex-wrap items-center gap-2" },
+                    React.createElement('button', {
+                      type: "button",
+                      onClick: () => playSingleChar(selectedDetailChar, 'phonics'),
+                      className: `px-3.5 py-2 rounded-xl text-xs sm:text-sm font-black flex items-center gap-1.5 shadow-xs cursor-pointer transition active:scale-95 ${
+                        activeChar === selectedDetailChar && mode === 'phonics' ?
+                          'bg-indigo-700 text-white ring-2 ring-indigo-400' :
+                          'bg-indigo-600 hover:bg-indigo-700 text-white'
+                      }`
+                    },
+                      React.createElement('span', null, "🔊"),
+                      React.createElement('span', null, `Nghe âm Phonics (${selectedDetailData.phonicsIpa})`)
+                    ),
+
+                    React.createElement('button', {
+                      type: "button",
+                      onClick: () => playSingleChar(selectedDetailChar, 'alphabet'),
+                      className: "px-3 py-2 bg-purple-100 hover:bg-purple-200 text-purple-900 rounded-xl text-xs sm:text-sm font-black flex items-center gap-1.5 border border-purple-300 shadow-xs cursor-pointer transition active:scale-95"
+                    },
+                      React.createElement('span', null, "🔤"),
+                      React.createElement('span', null, `Nghe tên chữ cái (${selectedDetailData.speech})`)
+                    )
+                  ),
+
+                  // Example word display with speaker
+                  selectedDetailData.example && React.createElement('div', {
+                    className: "flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl border border-purple-200 shadow-xs ml-auto"
+                  },
+                    React.createElement('span', { className: "text-base" }, selectedDetailData.exampleIcon || "📌"),
+                    React.createElement('div', { className: "text-xs text-left" },
+                      React.createElement('div', { className: "font-black text-slate-800" },
+                        selectedDetailData.example,
+                        React.createElement('span', { className: "text-indigo-600 font-mono ml-1.5 font-bold" }, selectedDetailData.exampleIpa)
+                      ),
+                      React.createElement('div', { className: "text-[11px] font-semibold text-slate-500" }, selectedDetailData.exampleVi)
+                    ),
+                    React.createElement('button', {
+                      type: "button",
+                      onClick: (e) => playWordExample(e, selectedDetailData.example),
+                      title: `Nghe từ ví dụ "${selectedDetailData.example}"`,
+                      className: "p-1.5 hover:bg-purple-100 text-purple-700 rounded-lg cursor-pointer transition active:scale-95 font-bold text-xs"
+                    }, "🔊 Nghe từ")
+                  )
+                )
+              ),
+
+              // 🔠 26-LETTER GRID (Bảng 26 chữ cái có trạng thái phóng to khi bấm)
+              React.createElement('div', null,
+                React.createElement('div', { className: "flex items-center justify-between mb-2 px-1" },
+                  React.createElement('h4', { className: "text-xs font-black text-slate-600 uppercase tracking-wider" },
+                    "Bấm vào thẻ chữ cái bất kỳ để xem phóng to chi tiết:"
+                  ),
+                  React.createElement('span', { className: "text-xs font-bold text-indigo-600" },
+                    `Đang chọn: ${selectedDetailChar} (${mode === 'phonics' ? selectedDetailData.phonicsIpa : selectedDetailData.ipa})`
+                  )
+                ),
+                React.createElement('div', { className: "grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-7 gap-2 sm:gap-2.5" },
+                  letters.map(ch => {
+                    const data = ALPHABET_DATA[ch];
+                    const isDetailSelected = selectedDetailChar === ch;
+                    const isActive = activeChar === ch;
+                    const displayIpa = mode === 'phonics' ? data.phonicsIpa : data.ipa;
+                    const displayVi = mode === 'phonics' ? data.phonicsViShort : data.vi;
+
+                    return React.createElement('div', {
+                      key: ch,
+                      role: "button",
+                      tabIndex: 0,
+                      onClick: () => playSingleChar(ch),
+                      onKeyDown: (e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          playSingleChar(ch);
+                        }
+                      },
+                      title: `Bấm để phóng to và nghe chữ "${ch}"`,
+                      'aria-label': `Phóng to và nghe phát âm chữ ${ch}`,
+                      className: `flex flex-col items-center justify-between p-2 sm:p-2.5 rounded-2xl border-2 transition-all cursor-pointer select-none outline-none transform ${
+                        isDetailSelected ?
+                          'bg-indigo-50/95 border-indigo-600 ring-4 ring-indigo-300 shadow-lg scale-105 z-10 -translate-y-1' :
+                          isActive ?
+                            'bg-amber-100 border-amber-500 ring-4 ring-amber-300 shadow-md scale-105' :
+                            'bg-white border-purple-200 hover:border-purple-400 hover:bg-purple-50/70 shadow-xs hover:-translate-y-0.5'
+                      }`
+                    },
+                      // Letter display
+                      React.createElement('div', { className: "flex items-baseline gap-1" },
+                        React.createElement('span', {
+                          className: `text-2xl sm:text-3xl font-black ${isDetailSelected ? 'text-indigo-700' : 'text-purple-900'}`
+                        }, ch),
+                        React.createElement('span', { className: "text-sm sm:text-base font-extrabold text-slate-400" }, ch.toLowerCase())
+                      ),
+
+                      // IPA Badge
+                      React.createElement('div', {
+                        className: `px-2 py-0.5 my-1 rounded-lg text-xs font-black tracking-wide ${
+                          mode === 'phonics' ?
+                            'bg-indigo-100 text-indigo-800' :
+                            'bg-purple-100 text-purple-800'
+                        }`
+                      }, displayIpa),
+
+                      // Example word tag in Phonics mode
+                      mode === 'phonics' && data.example ?
+                        React.createElement('div', {
+                          className: "w-full my-0.5 py-0.5 px-1 bg-amber-50 border border-amber-200 text-amber-900 rounded-md text-[10px] font-extrabold flex items-center justify-center gap-0.5 truncate"
+                        },
+                          React.createElement('span', null, data.exampleIcon || '📌'),
+                          React.createElement('span', { className: "truncate" }, data.example)
+                        ) : null,
+
+                      // Vietnamese approximation & speaker icon
+                      React.createElement('div', { className: "w-full flex items-center justify-between pt-1 border-t border-slate-100 text-[10px] sm:text-[11px] font-bold text-slate-600" },
+                        React.createElement('span', { className: "truncate", title: displayVi }, displayVi),
+                        React.createElement('span', {
+                          className: `text-xs ${isActive || isDetailSelected ? 'animate-bounce text-indigo-600' : 'text-purple-600'}`
+                        }, "🔊")
+                      )
+                    );
+                  })
+                )
+              )
+            ),
+
+            // Footer Guidance & Close
+            React.createElement('div', { className: "bg-white border-t border-purple-200 p-3 sm:p-4 flex flex-col sm:flex-row items-center justify-between gap-2.5 shrink-0" },
+              React.createElement('p', { className: "text-xs text-slate-600 font-semibold text-center sm:text-left" },
+                React.createElement('span', { className: "font-black text-purple-700" }, "💡 Ghi chú: "),
+                mode === 'alphabet' ?
+                  "Chế độ Tên chữ cái: phát âm tên gọi A (/eɪ/), B (/biː/), C (/siː/)... chuẩn xác quốc tế." :
+                  "Chế độ Ngữ âm Phonics: phát âm âm tiết gốc tự nhiên (/æ/, /b/, /k/...) chuẩn xác, kèm so sánh tương đồng với âm tiếng Việt giúp ghi nhớ nhanh."
+              ),
+              React.createElement('button', {
+                type: "button",
+                onClick: handleClose,
+                className: "w-full sm:w-auto px-6 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-extrabold text-sm rounded-xl shadow-md cursor-pointer transition-all"
+              }, "✓ Hoàn tất & Đóng")
+            )
+          )
+        );
+      };
+
+      // --- Screen 4: GameScreen (Listen Spelling & Order Characters with Gap) ---
+      const pastelLetterColors = [
+        'bg-sky-100 border-sky-300 text-sky-900 hover:bg-sky-200',
+        'bg-emerald-100 border-emerald-300 text-emerald-900 hover:bg-emerald-200',
+        'bg-rose-100 border-rose-300 text-rose-900 hover:bg-rose-200',
+        'bg-amber-100 border-amber-300 text-amber-900 hover:bg-amber-200',
+        'bg-purple-100 border-purple-300 text-purple-900 hover:bg-purple-200',
+        'bg-teal-100 border-teal-300 text-teal-900 hover:bg-teal-200',
+        'bg-indigo-100 border-indigo-300 text-indigo-900 hover:bg-indigo-200',
+        'bg-orange-100 border-orange-300 text-orange-900 hover:bg-orange-200',
+      ];
+
+      const shuffleArray = (array) => {
+        const arr = [...array];
+        for (let i = arr.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [arr[i], arr[j]] = [arr[j], arr[i]];
+        }
+        return arr;
+      };
+
+      const GameScreen = ({
+        sentences,
+        onTopicComplete,
+        onChooseAnotherTopic,
+        spellingMode: externalSpellingMode,
+        onToggleSpellingMode,
+        onOpenSoundboard,
+      }) => {
+        const [currentIndex, setCurrentIndex] = useState(0);
+        const [playerPlacedTiles, setPlayerPlacedTiles] = useState([]);
+        const [shuffledWordGroups, setShuffledWordGroups] = useState([]);
+        const [mistakeCount, setMistakeCount] = useState(0);
+        const [incorrectTileId, setIncorrectTileId] = useState(null);
+        const [message, setMessage] = useState(null);
+        const [score, setScore] = useState(0);
+        const [correctlyAnswered, setCorrectlyAnswered] = useState(0);
+        const [isWordDone, setIsWordDone] = useState(false);
+        const [isGapActive, setIsGapActive] = useState(false);
+        const [highlightedGlobalIdx, setHighlightedGlobalIdx] = useState(-1);
+        const [isSpellingActive, setIsSpellingActive] = useState(false);
+        const [selectedVoiceURI, setSelectedVoiceURI] = useState(null);
+        const [internalSpellingMode, setInternalSpellingMode] = useState(() => {
+          try {
+            return localStorage.getItem('english_spelling_mode') || 'alphabet';
+          } catch (e) {
+            return 'alphabet';
+          }
+        });
+
+        const spellingMode = externalSpellingMode || internalSpellingMode;
+        const setSpellingMode = (newMode) => {
+          setInternalSpellingMode(newMode);
+          if (onToggleSpellingMode) onToggleSpellingMode(newMode);
+          try { localStorage.setItem('english_spelling_mode', newMode); } catch (e) {}
+        };
+
+        const [preferredSpeed, setPreferredSpeed] = useState(() => {
+          try {
+            return localStorage.getItem('english_spelling_speed') || 'normal';
+          } catch (e) {
+            return 'normal';
+          }
+        });
+
+        const advanceTimerRef = useRef(null);
+        const autoAdvanceSafetyRef = useRef(null);
+
+        const { speakWord, speakLetter, spellVocabulary, cancel, isSpeaking, voices } = useSpeechSynthesis();
+
+        const selectedVoice = useMemo(() => {
+          if (!voices || voices.length === 0) return null;
+          if (selectedVoiceURI) {
+            const found = voices.find(v => v.voiceURI === selectedVoiceURI);
+            if (found) return found;
+          }
+          const enVoices = voices.filter(v => v.lang && v.lang.toLowerCase().startsWith('en'));
+          const pool = enVoices.length > 0 ? enVoices : voices;
+          return pool.find(v => v.name.includes('Google US English')) ||
+                 pool.find(v => v.name.includes('Samantha')) ||
+                 pool.find(v => v.name.includes('Natural')) ||
+                 pool.find(v => v.default) ||
+                 pool[0];
+        }, [voices, selectedVoiceURI]);
+
+        useEffect(() => {
+          if (voices.length > 0 && !selectedVoiceURI) {
+            const enVoices = voices.filter(v => v.lang && v.lang.toLowerCase().startsWith('en'));
+            const pool = enVoices.length > 0 ? enVoices : voices;
+            const defaultVoice = pool.find(v => v.name.includes('Google US English')) ||
+                                 pool.find(v => v.name.includes('Samantha')) ||
+                                 pool.find(v => v.name.includes('Natural')) ||
+                                 pool.find(v => v.default) ||
+                                 pool[0];
+            if (defaultVoice) setSelectedVoiceURI(defaultVoice.voiceURI);
+          }
+        }, [voices, selectedVoiceURI]);
+
+        const currentItem = useMemo(() => sentences[currentIndex], [sentences, currentIndex]);
+
+        // Break current vocabulary into words and letter structure
+        const wordStructure = useMemo(() => {
+          if (!currentItem || !currentItem.en) return { words: [], expectedChars: [] };
+          const cleanText = currentItem.en.trim().toUpperCase();
+          const words = cleanText.split(/\s+/).filter(Boolean);
+
+          const expectedChars = [];
+          words.forEach((w, wIdx) => {
+            w.split('').forEach((ch, cIdx) => {
+              expectedChars.push({
+                char: ch,
+                wordIndex: wIdx,
+                charIndex: cIdx,
+                globalIndex: expectedChars.length,
+              });
+            });
+          });
+
+          return { words, expectedChars };
+        }, [currentItem]);
+
+        const stopPending = useCallback(() => {
+          if (advanceTimerRef.current) {
+            clearTimeout(advanceTimerRef.current);
+            advanceTimerRef.current = null;
+          }
+          if (autoAdvanceSafetyRef.current) {
+            clearTimeout(autoAdvanceSafetyRef.current);
+            autoAdvanceSafetyRef.current = null;
+          }
+          setIsSpellingActive(false);
+          setHighlightedGlobalIdx(-1);
+          setIsGapActive(false);
+          cancel();
+        }, [cancel]);
+
+        const advanceToNextOrFinish = useCallback((targetScore = score, targetCorrect = correctlyAnswered) => {
+          stopPending();
+          setIsSpellingActive(false);
+          setHighlightedGlobalIdx(-1);
+          setIsGapActive(false);
+
+          const totalCount = sentences?.length || 0;
+          if (currentIndex + 1 >= totalCount) {
+            onTopicComplete({
+              score: targetScore,
+              maxScore: totalCount * 10,
+              correct: targetCorrect,
+              total: totalCount,
+            });
+          } else {
+            setCurrentIndex(prev => prev + 1);
+          }
+        }, [currentIndex, sentences, score, correctlyAnswered, onTopicComplete, stopPending]);
+
+        const playSpellingAudio = useCallback((speedParam = preferredSpeed) => {
+          if (!currentItem) return;
+          stopPending();
+          setIsGapActive(false);
+          setHighlightedGlobalIdx(-1);
+          setIsSpellingActive(true);
+
+          const actualSpeed = typeof speedParam === 'boolean' ? (speedParam ? 'slow' : 'normal') : (speedParam || 'normal');
+          setPreferredSpeed(actualSpeed);
+          try {
+            localStorage.setItem('english_spelling_speed', actualSpeed);
+          } catch (e) {}
+
+          spellVocabulary(currentItem.en, {
+            voice: selectedVoice,
+            speed: actualSpeed,
+            mode: spellingMode,
+            onLetterHighlight: (wIdx, cIdx, globalIdx) => {
+              setHighlightedGlobalIdx(globalIdx);
+            },
+            onWordGap: (active) => {
+              setIsGapActive(active);
+            },
+            onEnd: () => {
+              setHighlightedGlobalIdx(-1);
+              setIsGapActive(false);
+              setIsSpellingActive(false);
+            },
+          });
+        }, [currentItem, selectedVoice, spellVocabulary, stopPending, preferredSpeed, spellingMode]);
+
+        // Start new vocabulary item
+        const startVocabularyItem = useCallback(() => {
+          const totalCount = sentences?.length || 0;
+          if (currentIndex >= totalCount) {
+            onTopicComplete({
+              score: score,
+              maxScore: totalCount * 10,
+              correct: correctlyAnswered,
+              total: totalCount,
+            });
+            return;
+          }
+
+          setIsWordDone(false);
+          setPlayerPlacedTiles([]);
+          setMistakeCount(0);
+          setMessage(null);
+          setHighlightedGlobalIdx(-1);
+          setIsGapActive(false);
+          setIsSpellingActive(true);
+          stopPending();
+
+          // Prepare shuffled tiles grouped by word with correspondence
+          const cleanText = (sentences[currentIndex]?.en || '').trim().toUpperCase();
+          const words = cleanText.split(/\s+/).filter(Boolean);
+          const groups = words.map((w, wIdx) => {
+            const letters = w.split('').map((ch, cIdx) => ({
+              id: `${wIdx}-${cIdx}-${ch}-${Math.random().toString(36).slice(2, 7)}`,
+              char: ch,
+              wordIndex: wIdx,
+              charIndex: cIdx,
+            }));
+            return shuffleArray(letters);
+          });
+
+          setShuffledWordGroups(groups);
+
+          // Auto-play spelling when question starts with preferred speed
+          playSpellingAudio(preferredSpeed);
+        }, [currentIndex, sentences, onTopicComplete, correctlyAnswered, score, stopPending, playSpellingAudio, preferredSpeed]);
+
+        useEffect(() => {
+          startVocabularyItem();
+          return stopPending;
+        }, [currentIndex]);
+
+        useEffect(() => {
+          return () => stopPending();
+        }, [stopPending]);
+
+        // Handle letter click from letter bank
+        const handleTileClick = (tile) => {
+          if (isWordDone) return;
+          // If spelling was running, instantly interrupt it so advanced students don't wait
+          if (isSpellingActive) {
+            stopPending();
+            setIsSpellingActive(false);
+            setHighlightedGlobalIdx(-1);
+            setIsGapActive(false);
+          }
+          stopPending();
+          setHighlightedGlobalIdx(-1);
+          setIsGapActive(false);
+
+          const currentNeededIndex = playerPlacedTiles.length;
+          const expectedCharObj = wordStructure.expectedChars[currentNeededIndex];
+
+          if (!expectedCharObj) return;
+
+          // Check if selected letter matches expected order
+          if (tile.wordIndex === expectedCharObj.wordIndex && tile.char === expectedCharObj.char) {
+            // Correct letter! Pronounce letter sound accurately according to selected mode
+            speakLetter(tile.char, { voice: selectedVoice, mode: spellingMode });
+            playSound('click');
+            const newPlaced = [...playerPlacedTiles, tile];
+            setPlayerPlacedTiles(newPlaced);
+
+            // Remove from its word group
+            setShuffledWordGroups(prev =>
+              prev.map((grp, gIdx) =>
+                gIdx === tile.wordIndex ? grp.filter(t => t.id !== tile.id) : grp
+              )
+            );
+            setMessage(null);
+
+            // Check if entire word/phrase is completed
+            if (newPlaced.length === wordStructure.expectedChars.length) {
+              setIsWordDone(true);
+              playSound('win');
+
+              let newScore = score;
+              let newCorrect = correctlyAnswered;
+
+              if (mistakeCount <= 2) {
+                newScore += 10;
+                newCorrect++;
+                setScore(newScore);
+                setCorrectlyAnswered(newCorrect);
+                setMessage({
+                  text: '🎉 Xuất sắc! Bạn đã đánh vần chính xác (+10 điểm)',
+                  type: 'success'
+                });
+              } else {
+                setMessage({
+                  text: `Đã hoàn thành từ! (Sai ${mistakeCount} lần, không cộng điểm)`,
+                  type: 'info'
+                });
+              }
+
+              // Speak complete word proudly
+              speakWord(currentItem.en, {
+                voice: selectedVoice,
+                rate: 0.9,
+                onEnd: () => {
+                  if (advanceTimerRef.current) clearTimeout(advanceTimerRef.current);
+                  advanceTimerRef.current = setTimeout(() => {
+                    advanceToNextOrFinish(newScore, newCorrect);
+                  }, 1400);
+                }
+              });
+
+              // Safety fallback
+              autoAdvanceSafetyRef.current = setTimeout(() => {
+                advanceToNextOrFinish(newScore, newCorrect);
+              }, 6000);
+            }
+          } else {
+            // Mistake
+            playSound('wrong');
+            setMistakeCount(prev => prev + 1);
+            setIncorrectTileId(tile.id);
+            if (tile.wordIndex !== expectedCharObj.wordIndex) {
+              setMessage({
+                text: `Hãy chọn chữ cái của từ thứ ${expectedCharObj.wordIndex + 1} trước nhé!`,
+                type: 'error'
+              });
+            } else {
+              setMessage({
+                text: `Chưa đúng ký tự! Hãy lắng nghe kỹ âm đánh vần tiếp theo. (Số lần sai: ${mistakeCount + 1})`,
+                type: 'error'
+              });
+            }
+            setTimeout(() => setIncorrectTileId(null), 450);
+          }
+        };
+
+        // Undo / Remove last placed letter
+        const handleUndoLast = () => {
+          if (isWordDone || isSpellingActive || playerPlacedTiles.length === 0) return;
+          const lastTile = playerPlacedTiles[playerPlacedTiles.length - 1];
+          setPlayerPlacedTiles(prev => prev.slice(0, prev.length - 1));
+          setShuffledWordGroups(prev =>
+            prev.map((grp, gIdx) =>
+              gIdx === lastTile.wordIndex ? [...grp, lastTile] : grp
+            )
+          );
+          setMessage(null);
+        };
+
+        // Reset current word
+        const handleResetWord = () => {
+          if (isWordDone || isSpellingActive) return;
+          const cleanText = (currentItem?.en || '').trim().toUpperCase();
+          const words = cleanText.split(/\s+/).filter(Boolean);
+          const groups = words.map((w, wIdx) => {
+            const letters = w.split('').map((ch, cIdx) => ({
+              id: `${wIdx}-${cIdx}-${ch}-${Math.random().toString(36).slice(2, 7)}`,
+              char: ch,
+              wordIndex: wIdx,
+              charIndex: cIdx,
+            }));
+            return shuffleArray(letters);
+          });
+          setPlayerPlacedTiles([]);
+          setShuffledWordGroups(groups);
+          setMessage(null);
+        };
+
+        const isMultiWord = wordStructure.words.length >= 2;
+
+        return React.createElement('div', { className: "flex flex-col items-center gap-3 w-full animate-fade-in" },
+          // Meaning Banner (Vietnamese translation & instruction)
+          React.createElement('div', { className: "w-full text-center bg-purple-100/80 border border-purple-200 p-3 sm:p-4 rounded-2xl shadow-sm" },
+            currentItem?.vi ?
+              React.createElement('div', { className: "text-lg sm:text-2xl text-purple-950 font-extrabold flex items-center justify-center gap-2" },
+                React.createElement('span', null, currentItem.vi)
+              ) :
+              React.createElement('div', { className: "text-base sm:text-xl text-purple-900 font-bold" },
+                "🎧 Lắng nghe đánh vần và ghép các chữ cái thành từ vựng hoàn chỉnh"
+              )
+          ),
+
+          // Learning phase guidance banner
+          isSpellingActive ?
+            (() => {
+              const activeCharObj = highlightedGlobalIdx >= 0 ? wordStructure.expectedChars[highlightedGlobalIdx] : null;
+              const activeCharData = activeCharObj ? ALPHABET_DATA[activeCharObj.char.toUpperCase()] : null;
+              const ipaText = activeCharData ? (spellingMode === 'phonics' ? activeCharData.phonicsIpa : activeCharData.ipa) : '';
+              const soundGuide = activeCharData ? (spellingMode === 'phonics' ? activeCharData.phonicsVi : `âm "${activeCharData.vi}"`) : '';
+
+              return React.createElement('div', {
+                className: "w-full max-w-xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-extrabold px-3 sm:px-4 py-2 rounded-2xl flex items-center justify-between gap-2 shadow-md my-0.5 text-xs sm:text-sm"
+              },
+                React.createElement('div', { className: "flex items-center gap-1.5 sm:gap-2 truncate" },
+                  React.createElement('span', { className: "text-base sm:text-lg animate-pulse shrink-0" }, preferredSpeed === 'fast' ? "⚡" : "🎧"),
+                  activeCharData ?
+                    React.createElement('span', { className: "truncate flex items-center gap-1" },
+                      React.createElement('span', null, "Đang đọc:"),
+                      React.createElement('strong', { className: "text-amber-300 font-black text-sm sm:text-base underline underline-offset-2" }, activeCharObj.char),
+                      React.createElement('span', { className: "bg-white/20 px-1.5 py-0.5 rounded-md text-xs font-mono font-bold" }, ipaText),
+                      React.createElement('span', { className: "text-purple-200 text-xs hidden sm:inline" }, `(${soundGuide})`)
+                    ) :
+                    React.createElement('span', null,
+                      preferredSpeed === 'fast' ?
+                        "Đang đánh vần nhanh: Quan sát chữ cái nổi bật!" :
+                        "Đang đánh vần mẫu: Hãy quan sát các chữ cái nổi bật!"
+                    )
+                ),
+                React.createElement('button', {
+                  type: "button",
+                  onClick: () => {
+                    stopPending();
+                    setHighlightedGlobalIdx(-1);
+                    setIsGapActive(false);
+                    setIsSpellingActive(false);
+                  },
+                  title: "Bỏ qua thời gian đọc mẫu để ghép từ luôn",
+                  className: "bg-white/20 hover:bg-white/30 active:scale-95 text-white font-black text-xs px-2.5 py-1 rounded-xl border border-white/40 cursor-pointer transition-all flex items-center gap-1 shrink-0"
+                },
+                  React.createElement('span', null, "⏩"),
+                  React.createElement('span', null, "Ghép luôn")
+                )
+              );
+            })() :
+          !isWordDone ?
+            React.createElement('div', {
+              className: "w-full max-w-xl bg-emerald-50 border border-emerald-300 text-emerald-800 font-extrabold px-4 py-1.5 rounded-2xl flex items-center justify-center gap-2 shadow-xs my-0.5 text-xs sm:text-sm"
+            },
+              React.createElement('span', { className: "text-base" }, "👉"),
+              React.createElement('span', null, "Bây giờ hãy bấm chọn các chữ cái theo trật tự đúng!")
+            ) : null,
+
+          // Mode Switcher & Soundboard Bar
+          React.createElement('div', { className: "w-full max-w-2xl flex flex-wrap items-center justify-between gap-2 bg-purple-100/70 border border-purple-200 px-3 py-2 rounded-2xl text-xs sm:text-sm font-extrabold" },
+            React.createElement('div', { className: "flex items-center gap-1 bg-white p-1 rounded-xl border border-purple-200 shadow-xs" },
+              React.createElement('span', { className: "text-slate-500 px-1 text-xs hidden sm:inline" }, "Phát âm:"),
+              React.createElement('button', {
+                type: "button",
+                onClick: () => setSpellingMode('alphabet'),
+                title: "Phát âm tên chữ cái chuẩn tiếng Anh (A /eɪ/, B /biː/...)",
+                className: `px-2.5 py-1 rounded-lg transition-all cursor-pointer flex items-center gap-1 ${
+                  spellingMode === 'alphabet' ? 'bg-purple-600 text-white shadow-xs' : 'text-slate-700 hover:bg-purple-50'
+                }`
+              },
+                React.createElement('span', null, "🔤"),
+                React.createElement('span', null, "Tên chữ cái (A-B-C)")
+              ),
+              React.createElement('button', {
+                type: "button",
+                onClick: () => setSpellingMode('phonics'),
+                title: "Phát âm ngữ âm Phonics (/æ/, /b/, /k/...)",
+                className: `px-2.5 py-1 rounded-lg transition-all cursor-pointer flex items-center gap-1 ${
+                  spellingMode === 'phonics' ? 'bg-purple-600 text-white shadow-xs' : 'text-slate-700 hover:bg-purple-50'
+                }`
+              },
+                React.createElement('span', null, "🗣️"),
+                React.createElement('span', null, "Âm Phonics (/æ/, /b/...)")
+              )
+            ),
+
+            React.createElement('button', {
+              type: "button",
+              onClick: () => {
+                if (onOpenSoundboard) onOpenSoundboard();
+              },
+              title: "Mở bảng tra cứu & nghe thử toàn bộ 26 chữ cái (A - Z)",
+              className: "px-3 py-1.5 rounded-xl bg-amber-100 hover:bg-amber-200 active:bg-amber-300 text-amber-900 border border-amber-300 shadow-xs transition-all cursor-pointer flex items-center gap-1.5 font-black text-xs sm:text-sm shrink-0"
+            },
+              React.createElement('span', null, "📖"),
+              React.createElement('span', null, "Bảng âm 26 chữ cái")
+            )
+          ),
+
+          // TARGET LETTER DISPLAY (All Words on the Same Line separated by clean whitespace gap)
+          React.createElement('div', {
+            className: "w-full min-h-[130px] bg-gradient-to-br from-violet-50/90 to-sky-50/90 p-3 sm:p-5 rounded-3xl border-2 border-purple-200 shadow-inner flex flex-col items-center justify-center my-1"
+          },
+            // Continuous Horizontal Row
+            React.createElement('div', {
+              className: "w-full overflow-x-auto py-2 px-1 flex items-center justify-center flex-nowrap scrollbar-thin scrollbar-thumb-purple-200"
+            },
+              wordStructure.words.map((word, wIdx) => {
+                const charsInWord = word.split('');
+                const totalChars = wordStructure.expectedChars.length;
+                const slotSizeClass = totalChars > 11 ?
+                  "w-8 h-11 sm:w-10 sm:h-13 md:w-12 md:h-15 text-lg sm:text-xl md:text-2xl" :
+                  totalChars > 7 ?
+                  "w-9 h-12 sm:w-12 sm:h-15 md:w-13 md:h-16 text-xl sm:text-2xl md:text-3xl" :
+                  "w-11 h-14 sm:w-14 sm:h-17 md:w-16 md:h-18 text-2xl sm:text-3xl md:text-4xl";
+
+                return React.createElement(React.Fragment, { key: wIdx },
+                  // Word Letter Slots Group
+                  React.createElement('div', {
+                    className: "flex items-center gap-1 sm:gap-1.5 shrink-0 bg-white/70 border border-purple-200/80 rounded-2xl p-1.5 sm:p-2 shadow-xs"
+                  },
+                    charsInWord.map((expectedChar, cIdx) => {
+                      const targetObj = wordStructure.expectedChars.find(
+                        ec => ec.wordIndex === wIdx && ec.charIndex === cIdx
+                      );
+                      const gIdx = targetObj ? targetObj.globalIndex : 0;
+                      const placedTile = playerPlacedTiles[gIdx];
+                      const isCurrentSlot = playerPlacedTiles.length === gIdx && !isWordDone && !isSpellingActive;
+                      const isAudioHighlighted = highlightedGlobalIdx === gIdx;
+
+                      let displayChar = '';
+                      let slotStyle = '';
+
+                      if (isWordDone) {
+                        displayChar = expectedChar;
+                        slotStyle = 'bg-gradient-to-b from-emerald-500 to-teal-600 text-white shadow-md border-2 border-emerald-400 scale-100';
+                      } else if (isSpellingActive) {
+                        // Lúc nghe đánh vần: hiển thị đầy đủ, đánh vần tới đâu nổi bật đồng bộ tới đó
+                        displayChar = expectedChar;
+                        if (isAudioHighlighted) {
+                          slotStyle = 'bg-amber-300 border-3 border-amber-500 text-amber-950 scale-115 shadow-xl ring-4 ring-amber-300 font-black animate-pulse z-10';
+                        } else {
+                          slotStyle = 'bg-white/95 border-2 border-purple-200 text-purple-900 font-black shadow-sm';
+                        }
+                      } else {
+                        // Sau khi nghe đánh vần xong: chữ biến mất để học sinh bấm chọn
+                        if (placedTile) {
+                          displayChar = placedTile.char;
+                          slotStyle = 'bg-gradient-to-b from-purple-500 to-indigo-600 text-white shadow-md border-2 border-purple-400 cursor-pointer hover:scale-105';
+                        } else if (isCurrentSlot) {
+                          displayChar = '';
+                          slotStyle = 'bg-purple-100 border-2 border-dashed border-purple-500 text-purple-400 shadow-inner';
+                        } else {
+                          displayChar = '';
+                          slotStyle = 'bg-slate-100 border-2 border-dashed border-slate-300 text-slate-300';
+                        }
+                      }
+
+                      return React.createElement('div', {
+                        key: cIdx,
+                        onClick: () => {
+                          if (placedTile && !isWordDone && !isSpellingActive) handleUndoLast();
+                        },
+                        title: placedTile ? "Bấm để xóa chữ này" : undefined,
+                        className: `${slotSizeClass} rounded-xl sm:rounded-2xl flex items-center justify-center font-black transition-all select-none duration-150 shrink-0 ${slotStyle}`
+                      }, displayChar);
+                    })
+                  ),
+
+                  // KHOẢNG TRỐNG CÁCH RA GIỮA CÁC TỪ TRÊN CÙNG 1 DÒNG (Không dùng ô chữ, cách ra 1 khoảng trống tự nhiên)
+                  (isMultiWord && wIdx < wordStructure.words.length - 1) &&
+                    React.createElement('div', {
+                      className: "w-6 sm:w-10 md:w-12 shrink-0 select-none pointer-events-none",
+                      'aria-hidden': "true"
+                    })
+                );
+              })
+            )
+          ),
+
+          // Message Feedback
+          React.createElement('div', { className: "min-h-[28px] text-center" },
+            message && React.createElement('p', {
+              className: `text-base sm:text-lg font-extrabold ${
+                message.type === 'success' ? 'text-emerald-600' :
+                message.type === 'info' ? 'text-purple-700' : 'text-rose-600'
+              }`
+            }, message.text)
+          ),
+
+          // SCRAMBLED LETTER BANK (Interactive Character Tiles separated by whitespace gap between words)
+          React.createElement('div', { className: "w-full flex flex-col items-center gap-2" },
+            React.createElement('div', { className: "flex items-center justify-between w-full max-w-xl px-2 text-xs font-bold text-slate-500" },
+              React.createElement('span', null,
+                isSpellingActive ?
+                  "🎧 Đang nghe đánh vần mẫu..." :
+                  "Bấm chọn các chữ cái bên dưới:"
+              ),
+              playerPlacedTiles.length > 0 && !isWordDone && !isSpellingActive && React.createElement('div', { className: "flex items-center gap-2" },
+                React.createElement('button', {
+                  type: "button",
+                  onClick: handleUndoLast,
+                  className: "text-rose-600 hover:text-rose-800 font-bold cursor-pointer text-xs flex items-center gap-1 bg-rose-50 px-2 py-1 rounded-lg border border-rose-200"
+                }, "⌫ Xóa chữ vừa chọn"),
+                React.createElement('button', {
+                  type: "button",
+                  onClick: handleResetWord,
+                  className: "text-slate-600 hover:text-slate-800 font-bold cursor-pointer text-xs flex items-center gap-1 bg-slate-100 px-2 py-1 rounded-lg border border-slate-200"
+                }, "🔄 Xếp lại từ đầu")
+              )
+            ),
+
+            React.createElement('div', {
+              className: "flex flex-wrap items-center justify-center gap-y-3 p-3 sm:p-4 bg-white rounded-3xl border-2 border-purple-200 shadow-sm w-full max-w-2xl min-h-[96px]"
+            },
+              shuffledWordGroups.every(g => g.length === 0) && !isWordDone ?
+                React.createElement('span', { className: "text-slate-400 font-semibold text-sm" }, "Đang nạp chữ cái...") :
+                shuffledWordGroups.map((group, wIdx) => {
+                  return React.createElement(React.Fragment, { key: wIdx },
+                    // Khối các chữ cái xáo trộn của từng từ vựng
+                    React.createElement('div', {
+                      className: "flex flex-wrap items-center justify-center gap-2 sm:gap-2.5 p-1.5 sm:p-2 bg-purple-50/70 rounded-2xl border border-purple-100/90 shadow-xs"
+                    },
+                      group.map((tile, tIdx) => {
+                        const isIncorrect = incorrectTileId === tile.id;
+                        const colorClass = pastelLetterColors[(tile.wordIndex * 4 + tIdx) % pastelLetterColors.length];
+
+                        return React.createElement('button', {
+                          key: tile.id,
+                          onClick: () => handleTileClick(tile),
+                          disabled: isWordDone,
+                          className: `w-11 h-13 sm:w-13 sm:h-15 md:w-14 md:h-16 rounded-2xl text-xl sm:text-2xl md:text-3xl font-black border-b-4 transition-all duration-150 transform hover:-translate-y-1 active:translate-y-0.5 active:border-b-2 shadow-md select-none ${
+                            isIncorrect ?
+                              'border-rose-500 bg-rose-100 text-rose-700 animate-shake' :
+                              `${colorClass} border-slate-300`
+                          } ${isWordDone ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`
+                        }, tile.char);
+                      })
+                    ),
+
+                    // Khoảng trống tương ứng với từ vựng trong ô xáo trộn!
+                    (wIdx < shuffledWordGroups.length - 1) &&
+                      React.createElement('div', {
+                        className: "w-6 sm:w-10 md:w-12 shrink-0 select-none pointer-events-none",
+                        'aria-hidden': "true"
+                      })
+                  );
+                })
+            )
+          ),
+
+          // Audio & Control Toolbar
+          React.createElement('div', { className: "flex flex-wrap justify-center items-center gap-2 sm:gap-3 my-2 w-full" },
+            React.createElement('button', {
+              onClick: () => {
+                playSound('click');
+                playSpellingAudio('normal');
+              },
+              title: "Tốc độ vừa chuẩn mẫu",
+              className: `py-2.5 sm:py-3 px-3.5 sm:px-4 text-sm sm:text-base font-extrabold rounded-2xl shadow-md transform hover:-translate-y-0.5 active:translate-y-0 transition-all cursor-pointer flex items-center gap-1.5 ${
+                preferredSpeed === 'normal' ? 'bg-purple-600 hover:bg-purple-700 text-white ring-2 ring-purple-300' : 'bg-purple-600 hover:bg-purple-700 text-white'
+              }`
+            },
+              React.createElement('span', { className: "text-base sm:text-lg" }, "🔊"),
+              React.createElement('span', null, "Nghe đánh vần")
+            ),
+
+            React.createElement('button', {
+              onClick: () => {
+                playSound('click');
+                playSpellingAudio('fast');
+              },
+              title: "Tốc độ nhanh cho học sinh giỏi, không cần chờ đợi",
+              className: `py-2.5 sm:py-3 px-3.5 sm:px-4 text-sm sm:text-base font-extrabold rounded-2xl shadow-md transform hover:-translate-y-0.5 active:translate-y-0 transition-all cursor-pointer flex items-center gap-1.5 ${
+                preferredSpeed === 'fast' ? 'bg-emerald-600 hover:bg-emerald-700 text-white ring-2 ring-emerald-300' : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+              }`
+            },
+              React.createElement('span', { className: "text-base sm:text-lg" }, "⚡"),
+              React.createElement('span', null, "Đánh vần nhanh")
+            ),
+
+            React.createElement('button', {
+              onClick: () => {
+                playSound('click');
+                playSpellingAudio('slow');
+              },
+              title: "Tốc độ chậm từng chữ",
+              className: `py-2.5 sm:py-3 px-3.5 sm:px-4 text-sm sm:text-base font-bold rounded-2xl shadow-md transform hover:-translate-y-0.5 active:translate-y-0 transition-all cursor-pointer flex items-center gap-1.5 ${
+                preferredSpeed === 'slow' ? 'bg-indigo-600 hover:bg-indigo-700 text-white ring-2 ring-indigo-300' : 'bg-indigo-600 hover:bg-indigo-700 text-white'
+              }`
+            },
+              React.createElement('span', null, "🐢"),
+              React.createElement('span', null, "Đánh vần chậm")
+            ),
+
+            React.createElement('button', {
+              onClick: () => {
+                playSound('click');
+                speakWord(currentItem.en, { voice: selectedVoice });
+              },
+              title: "Phát âm nguyên từ tiếng Anh",
+              className: "py-2.5 sm:py-3 px-3.5 sm:px-4 text-sm sm:text-base font-bold bg-sky-600 hover:bg-sky-700 text-white rounded-2xl shadow-md transform hover:-translate-y-0.5 active:translate-y-0 transition-all cursor-pointer flex items-center gap-1.5"
+            },
+              React.createElement('span', null, "🗣️"),
+              React.createElement('span', null, "Phát âm cả từ")
+            ),
+
+            // Voice Selector
+            React.createElement('div', { className: "relative" },
+              React.createElement('select', {
+                value: selectedVoiceURI || '',
+                onChange: (e) => setSelectedVoiceURI(e.target.value),
+                disabled: voices.length === 0,
+                'aria-label': "Chọn giọng đọc tiếng Anh",
+                className: "py-3 px-4 text-xs sm:text-sm font-bold bg-white text-slate-700 rounded-2xl shadow-sm appearance-none border-2 border-purple-200 focus:outline-none focus:ring-2 focus:ring-purple-400 cursor-pointer disabled:bg-slate-100 pr-8"
+              },
+                voices.length === 0 ?
+                  React.createElement('option', {}, "Đang nạp giọng đọc...") :
+                  voices.map(v => React.createElement('option', { key: v.voiceURI, value: v.voiceURI }, v.name))
+              ),
+              React.createElement('div', { className: "pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-500" },
+                React.createElement('span', { className: "text-xs" }, "▼")
+              )
+            ),
+
+            React.createElement('button', {
+              onClick: onChooseAnotherTopic,
+              className: "py-3 px-4 text-sm sm:text-base font-bold bg-amber-500 hover:bg-amber-600 text-slate-900 rounded-2xl shadow-md transform hover:-translate-y-0.5 active:translate-y-0 transition-all cursor-pointer flex items-center gap-1.5"
+            },
+              React.createElement('span', null, "📚"),
+              React.createElement('span', null, "Chọn chủ đề khác")
+            )
+          ),
+
+          // Score & Progress Bar
+          React.createElement('div', { className: "w-full flex items-center justify-between text-xs sm:text-sm font-extrabold text-purple-900 bg-purple-100/90 py-2.5 px-6 rounded-2xl shadow-inner border border-purple-200 mt-2" },
+            React.createElement('span', null, `Điểm số: ${score} / ${sentences.length * 10}`),
+            React.createElement('span', null, `Từ: ${Math.min(currentIndex + 1, sentences.length)} / ${sentences.length}`),
+            React.createElement('span', { className: "text-emerald-700" }, `Đúng: ${correctlyAnswered} từ`)
+          )
+        );
+      };
+
+      // --- Screen 5: TopicCongratsScreen (Completion & Summary) ---
+      const TopicCongratsScreen = ({
+        playerName,
+        topicName,
+        score,
+        maxScore,
+        correctCount,
+        totalCount,
+        onPlayAgain,
+        onChooseAnotherTopic,
+      }) => {
+        const total = totalCount || 0;
+        const correct = correctCount || 0;
+        const finalScore = typeof score === 'number' ? score : (correct * 10);
+        const totalPossibleScore = typeof maxScore === 'number' ? maxScore : (total * 10);
+        const percent = total > 0 ? Math.round((correct / total) * 100) : 0;
+
+        let evalData = {
+          badge: '🏆 Xuất sắc!',
+          badgeStyle: 'bg-emerald-100 text-emerald-900 border-emerald-300',
+          title: 'Đánh vần chuẩn xác tuyệt đối!',
+          desc: 'Bạn đã nghe và sắp xếp các chữ cái thành từ vựng cực kỳ chuẩn xác.',
+          barColor: 'bg-emerald-500'
+        };
+
+        if (percent === 100) {
+          evalData = {
+            badge: '🏆 Tuyệt đỉnh 100%!',
+            badgeStyle: 'bg-amber-100 text-amber-900 border-amber-300',
+            title: 'Kỹ năng nghe đánh vần tuyệt vời!',
+            desc: 'Phản xạ âm và sắp xếp chữ cái tiếng Anh của bạn hoàn hảo không tì vết!',
+            barColor: 'bg-amber-500'
+          };
+        } else if (percent >= 80) {
+          evalData = {
+            badge: '🌟 Rất giỏi!',
+            badgeStyle: 'bg-indigo-100 text-indigo-900 border-indigo-300',
+            title: 'Khả năng nhận biết âm rất tốt!',
+            desc: 'Bạn đã hoàn thành xuất sắc bài học với độ chính xác cao.',
+            barColor: 'bg-indigo-500'
+          };
+        } else if (percent >= 50) {
+          evalData = {
+            badge: '👍 Khá tốt!',
+            badgeStyle: 'bg-blue-100 text-blue-900 border-blue-300',
+            title: 'Đã hoàn thành bài tập!',
+            desc: 'Bạn đã nắm vững nhiều từ vựng cơ bản. Hãy làm lại để đạt điểm tuyệt đối nhé!',
+            barColor: 'bg-blue-500'
+          };
+        } else {
+          evalData = {
+            badge: '💪 Cố lên nhé!',
+            badgeStyle: 'bg-rose-100 text-rose-900 border-rose-300',
+            title: 'Hãy thử lại thêm một lần!',
+            desc: 'Luyện nghe đánh vần thêm vài lần sẽ giúp bạn nhớ mặt chữ và nghe chuẩn hơn nhiều.',
+            barColor: 'bg-rose-500'
+          };
+        }
+
+        return React.createElement('div', { className: "flex flex-col items-center gap-5 text-center p-2 sm:p-4 animate-fade-in w-full max-w-2xl mx-auto" },
+          React.createElement('div', { className: "w-full bg-white rounded-3xl p-6 sm:p-8 border-2 border-purple-300 shadow-2xl flex flex-col items-center gap-5" },
+            React.createElement('div', { className: "flex flex-col items-center gap-2" },
+              React.createElement('div', { className: "text-5xl sm:text-6xl animate-bounce" }, percent >= 80 ? '🎉' : '👏'),
+              React.createElement('h2', { className: "text-2xl sm:text-3xl md:text-4xl font-extrabold text-slate-800 tracking-tight" },
+                "Chúc mừng ",
+                React.createElement('span', { className: "text-purple-600 underline decoration-purple-400 decoration-wavy" }, playerName || 'Bạn'),
+                "!"
+              ),
+              React.createElement('p', { className: "text-sm sm:text-base text-slate-600 font-medium" },
+                "Bạn đã hoàn thành bài tập đánh vần: ",
+                React.createElement('strong', { className: "text-purple-950 font-bold" }, `"${topicName || 'Bài tập'}"`)
+              )
+            ),
+
+            // Score Banner
+            React.createElement('div', { className: "w-full bg-gradient-to-br from-violet-50 via-purple-50 to-sky-50 rounded-2xl p-5 sm:p-6 border-2 border-purple-200 shadow-inner flex flex-col items-center gap-3" },
+              React.createElement('span', { className: "text-xs sm:text-sm uppercase tracking-wider font-extrabold text-purple-800 bg-purple-200/70 px-4 py-1.5 rounded-full border border-purple-300" },
+                "📊 BẢNG ĐIỂM TỔNG KẾT"
+              ),
+              React.createElement('div', { className: "flex items-baseline justify-center gap-2 my-1" },
+                React.createElement('span', { className: "text-5xl sm:text-6xl font-black text-purple-700 tracking-tight" }, finalScore),
+                React.createElement('span', { className: "text-2xl sm:text-3xl font-bold text-slate-500" }, `/ ${totalPossibleScore} điểm`)
+              ),
+              React.createElement('div', { className: "text-base sm:text-xl font-bold text-slate-700" },
+                `Đánh vần đúng: `,
+                React.createElement('span', { className: "text-emerald-600 font-extrabold text-xl sm:text-2xl" }, correct),
+                ` / `,
+                React.createElement('span', { className: "text-slate-800 font-extrabold text-xl sm:text-2xl" }, total),
+                ` từ vựng`
+              ),
+              // Progress Bar
+              React.createElement('div', { className: "w-full max-w-md bg-slate-200 h-4 rounded-full overflow-hidden mt-1 shadow-inner border border-slate-300" },
+                React.createElement('div', {
+                  className: `h-full rounded-full transition-all duration-1000 ${evalData.barColor}`,
+                  style: { width: `${Math.max(percent, 5)}%` }
+                })
+              ),
+              React.createElement('span', { className: "text-sm font-bold text-slate-600" },
+                `Độ chính xác: ${percent}%`
+              )
+            ),
+
+            // Evaluation Feedback Box
+            React.createElement('div', { className: `w-full p-4 sm:p-5 rounded-2xl border-2 text-center flex flex-col items-center gap-1 ${evalData.badgeStyle}` },
+              React.createElement('span', { className: "font-black text-lg sm:text-xl" }, evalData.badge),
+              React.createElement('p', { className: "text-sm sm:text-base font-semibold mt-0.5" }, evalData.desc)
+            ),
+
+            // Action Buttons
+            React.createElement('div', { className: "flex flex-col sm:flex-row items-center gap-3.5 w-full mt-3" },
+              React.createElement('button', {
+                type: "button",
+                onClick: onPlayAgain,
+                className: "w-full py-4 px-6 text-base sm:text-lg rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-extrabold shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 active:translate-y-0 transition-all cursor-pointer flex items-center justify-center gap-2.5 border-2 border-blue-400"
+              },
+                React.createElement('span', { className: "text-2xl" }, "🔄"),
+                React.createElement('span', null, "Luyện lại chủ đề này")
+              ),
+              React.createElement('button', {
+                type: "button",
+                onClick: onChooseAnotherTopic,
+                className: "w-full py-4 px-6 text-base sm:text-lg rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-extrabold shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 active:translate-y-0 transition-all cursor-pointer flex items-center justify-center gap-2.5 border-2 border-amber-300"
+              },
+                React.createElement('span', { className: "text-2xl" }, "📚"),
+                React.createElement('span', null, "Chọn chủ đề khác")
+              )
+            )
+          )
+        );
+      };
+
+      // --- Main App Component ---
+      const CUSTOM_TOPICS_STORAGE_KEY = 'spelling_custom_topics_v3';
+
+      const loadSavedCustomTopics = () => {
+        try {
+          const raw = localStorage.getItem(CUSTOM_TOPICS_STORAGE_KEY);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (parsed && typeof parsed === 'object') return parsed;
+          }
+        } catch (e) {
+          console.error('Lỗi khi tải chủ đề:', e);
+        }
+        return {};
+      };
+
+      const App = () => {
+        const [gameState, setGameState] = useState(GameState.Start);
+        const [playerName, setPlayerName] = useState('');
+        const [selectedTopic, setSelectedTopic] = useState('');
+        const [topicSentences, setTopicSentences] = useState([]);
+        const [lastScore, setLastScore] = useState({ score: 0, maxScore: 0, correct: 0, total: 0 });
+        const [playSessionKey, setPlaySessionKey] = useState(0);
+        const [customTopics, setCustomTopics] = useState(loadSavedCustomTopics);
+        const [editingTopicName, setEditingTopicName] = useState(null);
+        const [showSoundboardModal, setShowSoundboardModal] = useState(false);
+        const [spellingMode, setSpellingMode] = useState(() => {
+          try {
+            return localStorage.getItem('english_spelling_mode') || 'alphabet';
+          } catch (e) {
+            return 'alphabet';
+          }
+        });
+
+        const { voices } = useSpeechSynthesis();
+
+        const allTopics = useMemo(() => {
+          return { ...defaultTopics, ...customTopics };
+        }, [customTopics]);
+
+        const handleStart = useCallback((name) => {
+          setPlayerName(name);
+          setGameState(GameState.TopicSelection);
+        }, []);
+
+        const handleSelectTopic = useCallback((topicName) => {
+          setSelectedTopic(topicName);
+          setTopicSentences(allTopics[topicName] || []);
+          setPlaySessionKey(prev => prev + 1);
+          setGameState(GameState.Playing);
+        }, [allTopics]);
+
+        const handleCreateTopic = useCallback(() => {
+          setEditingTopicName(null);
+          setGameState(GameState.TopicEditor);
+        }, []);
+
+        const handleEditTopic = useCallback((topicName) => {
+          setEditingTopicName(topicName);
+          setGameState(GameState.TopicEditor);
+        }, []);
+
+        const handleDeleteTopic = useCallback((topicName) => {
+          if (window.confirm(`Bạn có chắc chắn muốn xóa chủ đề "${topicName}" không?`)) {
+            setCustomTopics(prev => {
+              const updated = { ...prev };
+              delete updated[topicName];
+              try {
+                localStorage.setItem(CUSTOM_TOPICS_STORAGE_KEY, JSON.stringify(updated));
+              } catch (e) {
+                console.error(e);
+              }
+              return updated;
+            });
+          }
+        }, []);
+
+        const handleSaveTopic = useCallback((name, sentences, playImmediately) => {
+          setCustomTopics(prev => {
+            const updated = { ...prev };
+            if (editingTopicName && editingTopicName !== name && updated[editingTopicName]) {
+              delete updated[editingTopicName];
+            }
+            updated[name] = sentences;
+            try {
+              localStorage.setItem(CUSTOM_TOPICS_STORAGE_KEY, JSON.stringify(updated));
+            } catch (e) {
+              console.error(e);
+            }
+            return updated;
+          });
+
+          if (playImmediately) {
+            setSelectedTopic(name);
+            setTopicSentences(sentences);
+            setPlaySessionKey(prev => prev + 1);
+            setGameState(GameState.Playing);
+          } else {
+            setGameState(GameState.TopicSelection);
+          }
+        }, [editingTopicName]);
+
+        const handleCancelEditor = useCallback(() => {
+          setGameState(GameState.TopicSelection);
+        }, []);
+
+        const handleTopicComplete = useCallback((result) => {
+          if (typeof result === 'object' && result !== null) {
+            setLastScore({
+              score: typeof result.score === 'number' ? result.score : ((result.correct || 0) * 10),
+              maxScore: typeof result.maxScore === 'number' ? result.maxScore : ((result.total || 0) * 10),
+              correct: result.correct || 0,
+              total: result.total || 0,
+            });
+          }
+          setGameState(GameState.Congrats);
+        }, []);
+
+        const handlePlayAgain = useCallback(() => {
+          if (selectedTopic && allTopics[selectedTopic]) {
+            setTopicSentences(allTopics[selectedTopic]);
+            setPlaySessionKey(prev => prev + 1);
+            setGameState(GameState.Playing);
+          } else {
+            setGameState(GameState.TopicSelection);
+          }
+        }, [selectedTopic, allTopics]);
+
+        const handleChooseAnotherTopic = useCallback(() => {
+          setSelectedTopic('');
+          setTopicSentences([]);
+          setGameState(GameState.TopicSelection);
+        }, []);
+
+        const renderScreen = () => {
+          switch (gameState) {
+            case GameState.Start:
+              return React.createElement(StartScreen, {
+                onStart: handleStart,
+                onOpenSoundboard: () => setShowSoundboardModal(true),
+              });
+            case GameState.TopicSelection:
+              return React.createElement(TopicSelectionScreen, {
+                presetTopics: defaultTopics,
+                customTopics: customTopics,
+                onSelectTopic: handleSelectTopic,
+                onCreateTopic: handleCreateTopic,
+                onEditTopic: handleEditTopic,
+                onDeleteTopic: handleDeleteTopic,
+                onOpenSoundboard: () => setShowSoundboardModal(true),
+              });
+            case GameState.TopicEditor:
+              return React.createElement(TopicEditorScreen, {
+                initialTopicName: editingTopicName,
+                initialSentences: editingTopicName ? customTopics[editingTopicName] : null,
+                existingTopicNames: Object.keys(allTopics),
+                onSave: handleSaveTopic,
+                onCancel: handleCancelEditor,
+              });
+            case GameState.Playing:
+              return React.createElement(GameScreen, {
+                key: `${selectedTopic}-${playSessionKey}`,
+                sentences: topicSentences,
+                onTopicComplete: handleTopicComplete,
+                onChooseAnotherTopic: handleChooseAnotherTopic,
+                spellingMode: spellingMode,
+                onToggleSpellingMode: (m) => {
+                  setSpellingMode(m);
+                  try { localStorage.setItem('english_spelling_mode', m); } catch (e) {}
+                },
+                onOpenSoundboard: () => setShowSoundboardModal(true),
+              });
+            case GameState.Congrats:
+              return React.createElement(TopicCongratsScreen, {
+                playerName: playerName,
+                topicName: selectedTopic,
+                score: lastScore.score,
+                maxScore: lastScore.maxScore,
+                correctCount: lastScore.correct,
+                totalCount: lastScore.total,
+                onPlayAgain: handlePlayAgain,
+                onChooseAnotherTopic: handleChooseAnotherTopic,
+              });
+            default:
+              return React.createElement(StartScreen, {
+                onStart: handleStart,
+                onOpenSoundboard: () => setShowSoundboardModal(true),
+              });
+          }
+        };
+
+        return React.createElement('div', { className: "bg-gradient-to-br from-violet-100 via-purple-50 to-sky-100 min-h-screen w-full flex justify-center items-center p-3 sm:p-5" },
+          React.createElement('main', { className: "container mx-auto text-center p-5 sm:p-7 max-w-4xl w-full bg-white/95 backdrop-blur-md rounded-3xl shadow-2xl shadow-violet-200 my-3 border border-white relative" },
+            React.createElement('h1', { className: "text-2xl sm:text-4xl md:text-5xl font-black text-purple-700 mb-1 tracking-tight" }, "NGHE ĐÁNH VẦN VÀ XẾP TỪ VỰNG"),
+            React.createElement('h2', { className: "text-base sm:text-xl text-slate-500 font-bold mb-5" }, "(Listen, Spell & Order Letters)"),
+            renderScreen()
+          ),
+          React.createElement(AlphabetSoundboardModal, {
+            isOpen: showSoundboardModal,
+            onClose: () => setShowSoundboardModal(false),
+            voices: voices,
+            currentMode: spellingMode,
+            onModeChange: (newMode) => {
+              setSpellingMode(newMode);
+              try { localStorage.setItem('english_spelling_mode', newMode); } catch (e) {}
+            }
+          })
+        );
+      };
+
+      // --- Mount React Root ---
+      const rootElement = document.getElementById('root');
+      const root = ReactDOM.createRoot(rootElement);
+      root.render(React.createElement(App));
+    </script>
+</body>
+</html>
