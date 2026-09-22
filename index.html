@@ -2285,24 +2285,6 @@ high school | Trường cấp ba 🏫`;
         return arr;
       };
 
-      // Helper to compute stable hidden character indices based on count and seed
-      const computeHiddenIndices = (totalChars, count, seed = 0) => {
-        if (count >= totalChars || count <= 0) {
-          return new Set(Array.from({ length: totalChars }, (_, i) => i));
-        }
-        const allIndices = Array.from({ length: totalChars }, (_, i) => i);
-        let s = (seed + 1) * 37 + totalChars * 17;
-        const pseudoRandom = () => {
-          s = (s * 9301 + 49297) % 233280;
-          return s / 233280;
-        };
-        for (let i = allIndices.length - 1; i > 0; i--) {
-          const j = Math.floor(pseudoRandom() * (i + 1));
-          [allIndices[i], allIndices[j]] = [allIndices[j], allIndices[i]];
-        }
-        return new Set(allIndices.slice(0, count));
-      };
-
       const GameScreen = ({
         sentences,
         onTopicComplete,
@@ -2329,24 +2311,6 @@ high school | Trường cấp ba 🏫`;
             return localStorage.getItem('english_spelling_mode') || 'alphabet';
           } catch (e) {
             return 'alphabet';
-          }
-        });
-
-        // Chế độ Luyện tập theo mức độ ẩn ký tự
-        const [difficultyMode, setDifficultyMode] = useState(() => {
-          try {
-            return localStorage.getItem('english_difficulty_mode') || 'all';
-          } catch (e) {
-            return 'all';
-          }
-        });
-
-        const [customHiddenCount, setCustomHiddenCount] = useState(() => {
-          try {
-            const saved = parseInt(localStorage.getItem('english_custom_hidden_count'), 10);
-            return !isNaN(saved) && saved > 0 ? saved : 2;
-          } catch (e) {
-            return 2;
           }
         });
 
@@ -2421,29 +2385,6 @@ high school | Trường cấp ba 🏫`;
           return { words, expectedChars };
         }, [currentItem]);
 
-        // Calculate effective hidden characters count
-        const effectiveHiddenCount = useMemo(() => {
-          const total = wordStructure.expectedChars.length;
-          if (total <= 0) return 0;
-          if (difficultyMode === '1_char') return Math.min(1, total);
-          if (difficultyMode === '25') return Math.max(1, Math.min(total, Math.round(total * 0.25)));
-          if (difficultyMode === '50') return Math.max(1, Math.min(total, Math.round(total * 0.5)));
-          if (difficultyMode === '75') return Math.max(1, Math.min(total, Math.round(total * 0.75)));
-          if (difficultyMode === 'all') return total;
-          if (difficultyMode === 'custom') return Math.max(1, Math.min(total, customHiddenCount));
-          return total;
-        }, [difficultyMode, customHiddenCount, wordStructure.expectedChars.length]);
-
-        // Set of globalIndices that are hidden
-        const hiddenCharIndices = useMemo(() => {
-          return computeHiddenIndices(wordStructure.expectedChars.length, effectiveHiddenCount, currentIndex);
-        }, [wordStructure.expectedChars.length, effectiveHiddenCount, currentIndex]);
-
-        // Sorted list of hidden indices that player needs to fill in sequence
-        const sortedHiddenIndices = useMemo(() => {
-          return Array.from(hiddenCharIndices).sort((a, b) => a - b);
-        }, [hiddenCharIndices]);
-
         const stopPending = useCallback(() => {
           if (advanceTimerRef.current) {
             clearTimeout(advanceTimerRef.current);
@@ -2509,32 +2450,6 @@ high school | Trường cấp ba 🏫`;
           });
         }, [currentItem, selectedVoice, spellVocabulary, stopPending, preferredSpeed, spellingMode]);
 
-        // Build word bank tiles for only hidden letters
-        const buildShuffledBank = useCallback((hiddenSet) => {
-          if (!currentItem || !currentItem.en) return [];
-          const words = currentItem.en.trim().toUpperCase().split(/\s+/).filter(Boolean);
-          const groups = words.map((w, wIdx) => {
-            const letters = [];
-            w.split('').forEach((ch, cIdx) => {
-              const targetObj = wordStructure.expectedChars.find(
-                ec => ec.wordIndex === wIdx && ec.charIndex === cIdx
-              );
-              const gIdx = targetObj ? targetObj.globalIndex : 0;
-              if (hiddenSet.has(gIdx)) {
-                letters.push({
-                  id: `${wIdx}-${cIdx}-${ch}-${Math.random().toString(36).slice(2, 7)}`,
-                  char: ch,
-                  wordIndex: wIdx,
-                  charIndex: cIdx,
-                  globalIndex: gIdx,
-                });
-              }
-            });
-            return shuffleArray(letters);
-          });
-          return groups;
-        }, [currentItem, wordStructure]);
-
         // Start new vocabulary item
         const startVocabularyItem = useCallback(() => {
           const totalCount = sentences?.length || 0;
@@ -2557,23 +2472,24 @@ high school | Trường cấp ba 🏫`;
           setIsSpellingActive(true);
           stopPending();
 
-          // Prepare shuffled tiles for hidden characters
-          const totalChars = wordStructure.expectedChars.length;
-          let targetHiddenCount = totalChars;
-          if (difficultyMode === '1_char') targetHiddenCount = Math.min(1, totalChars);
-          else if (difficultyMode === '25') targetHiddenCount = Math.max(1, Math.min(totalChars, Math.round(totalChars * 0.25)));
-          else if (difficultyMode === '50') targetHiddenCount = Math.max(1, Math.min(totalChars, Math.round(totalChars * 0.5)));
-          else if (difficultyMode === '75') targetHiddenCount = Math.max(1, Math.min(totalChars, Math.round(totalChars * 0.75)));
-          else if (difficultyMode === 'all') targetHiddenCount = totalChars;
-          else if (difficultyMode === 'custom') targetHiddenCount = Math.max(1, Math.min(totalChars, customHiddenCount));
+          // Prepare shuffled tiles grouped by word with correspondence
+          const cleanText = (sentences[currentIndex]?.en || '').trim().toUpperCase();
+          const words = cleanText.split(/\s+/).filter(Boolean);
+          const groups = words.map((w, wIdx) => {
+            const letters = w.split('').map((ch, cIdx) => ({
+              id: `${wIdx}-${cIdx}-${ch}-${Math.random().toString(36).slice(2, 7)}`,
+              char: ch,
+              wordIndex: wIdx,
+              charIndex: cIdx,
+            }));
+            return shuffleArray(letters);
+          });
 
-          const hiddenSet = computeHiddenIndices(totalChars, targetHiddenCount, currentIndex);
-          const groups = buildShuffledBank(hiddenSet);
           setShuffledWordGroups(groups);
 
           // Auto-play spelling when question starts with preferred speed
           playSpellingAudio(preferredSpeed);
-        }, [currentIndex, sentences, onTopicComplete, correctlyAnswered, score, stopPending, playSpellingAudio, preferredSpeed, wordStructure, difficultyMode, customHiddenCount, buildShuffledBank]);
+        }, [currentIndex, sentences, onTopicComplete, correctlyAnswered, score, stopPending, playSpellingAudio, preferredSpeed]);
 
         useEffect(() => {
           startVocabularyItem();
@@ -2584,49 +2500,10 @@ high school | Trường cấp ba 🏫`;
           return () => stopPending();
         }, [stopPending]);
 
-        // Switch difficulty mode preset
-        const handleSetDifficultyMode = (newMode) => {
-          setDifficultyMode(newMode);
-          try { localStorage.setItem('english_difficulty_mode', newMode); } catch (e) {}
-
-          const totalChars = wordStructure.expectedChars.length;
-          let targetHiddenCount = totalChars;
-          if (newMode === '1_char') targetHiddenCount = Math.min(1, totalChars);
-          else if (newMode === '25') targetHiddenCount = Math.max(1, Math.min(totalChars, Math.round(totalChars * 0.25)));
-          else if (newMode === '50') targetHiddenCount = Math.max(1, Math.min(totalChars, Math.round(totalChars * 0.5)));
-          else if (newMode === '75') targetHiddenCount = Math.max(1, Math.min(totalChars, Math.round(totalChars * 0.75)));
-          else if (newMode === 'all') targetHiddenCount = totalChars;
-          else if (newMode === 'custom') targetHiddenCount = Math.max(1, Math.min(totalChars, customHiddenCount));
-
-          const hiddenSet = computeHiddenIndices(totalChars, targetHiddenCount, currentIndex);
-          setShuffledWordGroups(buildShuffledBank(hiddenSet));
-          setPlayerPlacedTiles([]);
-          setIsWordDone(false);
-          setMessage(null);
-        };
-
-        // Fine-tune custom hidden count with [+] / [-]
-        const handleAdjustCustomHidden = (delta) => {
-          const totalChars = wordStructure.expectedChars.length;
-          if (totalChars <= 1) return;
-          const newCount = Math.max(1, Math.min(totalChars, effectiveHiddenCount + delta));
-          setDifficultyMode('custom');
-          setCustomHiddenCount(newCount);
-          try {
-            localStorage.setItem('english_difficulty_mode', 'custom');
-            localStorage.setItem('english_custom_hidden_count', newCount.toString());
-          } catch (e) {}
-
-          const hiddenSet = computeHiddenIndices(totalChars, newCount, currentIndex);
-          setShuffledWordGroups(buildShuffledBank(hiddenSet));
-          setPlayerPlacedTiles([]);
-          setIsWordDone(false);
-          setMessage(null);
-        };
-
         // Handle letter click from letter bank
         const handleTileClick = (tile) => {
           if (isWordDone) return;
+          // If spelling was running, instantly interrupt it so advanced students don't wait
           if (isSpellingActive) {
             stopPending();
             setIsSpellingActive(false);
@@ -2637,12 +2514,8 @@ high school | Trường cấp ba 🏫`;
           setHighlightedGlobalIdx(-1);
           setIsGapActive(false);
 
-          // Find the next hidden character slot that needs to be filled
-          const currentHiddenSequenceIndex = playerPlacedTiles.length;
-          if (currentHiddenSequenceIndex >= sortedHiddenIndices.length) return;
-
-          const targetGlobalIdx = sortedHiddenIndices[currentHiddenSequenceIndex];
-          const expectedCharObj = wordStructure.expectedChars[targetGlobalIdx];
+          const currentNeededIndex = playerPlacedTiles.length;
+          const expectedCharObj = wordStructure.expectedChars[currentNeededIndex];
 
           if (!expectedCharObj) return;
 
@@ -2651,10 +2524,10 @@ high school | Trường cấp ba 🏫`;
             // Correct letter! Pronounce letter sound accurately according to selected mode
             speakLetter(tile.char, { voice: selectedVoice, mode: spellingMode });
             playSound('click');
-            const newPlaced = [...playerPlacedTiles, { ...tile, globalIndex: targetGlobalIdx }];
+            const newPlaced = [...playerPlacedTiles, tile];
             setPlayerPlacedTiles(newPlaced);
 
-            // Remove from its word group in letter bank
+            // Remove from its word group
             setShuffledWordGroups(prev =>
               prev.map((grp, gIdx) =>
                 gIdx === tile.wordIndex ? grp.filter(t => t.id !== tile.id) : grp
@@ -2662,8 +2535,8 @@ high school | Trường cấp ba 🏫`;
             );
             setMessage(null);
 
-            // Check if all hidden characters are completed
-            if (newPlaced.length === sortedHiddenIndices.length) {
+            // Check if entire word/phrase is completed
+            if (newPlaced.length === wordStructure.expectedChars.length) {
               setIsWordDone(true);
               playSound('win');
 
@@ -2676,7 +2549,7 @@ high school | Trường cấp ba 🏫`;
                 setScore(newScore);
                 setCorrectlyAnswered(newCorrect);
                 setMessage({
-                  text: '🎉 Xuất sắc! Bạn đã điền chính xác tất cả các chữ (+10 điểm)',
+                  text: '🎉 Xuất sắc! Bạn đã đánh vần chính xác (+10 điểm)',
                   type: 'success'
                 });
               } else {
@@ -2710,7 +2583,7 @@ high school | Trường cấp ba 🏫`;
             setIncorrectTileId(tile.id);
             if (tile.wordIndex !== expectedCharObj.wordIndex) {
               setMessage({
-                text: `Hãy chọn chữ cái còn thiếu của từ thứ ${expectedCharObj.wordIndex + 1} trước nhé!`,
+                text: `Hãy chọn chữ cái của từ thứ ${expectedCharObj.wordIndex + 1} trước nhé!`,
                 type: 'error'
               });
             } else {
@@ -2739,8 +2612,19 @@ high school | Trường cấp ba 🏫`;
         // Reset current word
         const handleResetWord = () => {
           if (isWordDone || isSpellingActive) return;
-          setShuffledWordGroups(buildShuffledBank(hiddenCharIndices));
+          const cleanText = (currentItem?.en || '').trim().toUpperCase();
+          const words = cleanText.split(/\s+/).filter(Boolean);
+          const groups = words.map((w, wIdx) => {
+            const letters = w.split('').map((ch, cIdx) => ({
+              id: `${wIdx}-${cIdx}-${ch}-${Math.random().toString(36).slice(2, 7)}`,
+              char: ch,
+              wordIndex: wIdx,
+              charIndex: cIdx,
+            }));
+            return shuffleArray(letters);
+          });
           setPlayerPlacedTiles([]);
+          setShuffledWordGroups(groups);
           setMessage(null);
         };
 
@@ -2785,93 +2669,6 @@ high school | Trường cấp ba 🏫`;
             },
               React.createElement('span', null, "📖"),
               React.createElement('span', null, "Bảng âm 26 chữ cái")
-            )
-          ),
-
-          // 🎯 BẢNG CHỌN CHẾ ĐỘ: 'Luyện tập theo mức độ' (Ẩn dần ký tự để tăng độ khó)
-          React.createElement('div', {
-            className: "w-full max-w-2xl bg-white/95 rounded-2xl p-2.5 sm:p-3.5 border-2 border-indigo-200 shadow-sm flex flex-col gap-2 my-0.5"
-          },
-            // Top Row: Tiêu đề + Các mốc mức độ nhanh (Presets)
-            React.createElement('div', { className: "flex flex-wrap items-center justify-between gap-2" },
-              React.createElement('div', { className: "flex items-center gap-1.5 text-xs sm:text-sm font-black text-indigo-950" },
-                React.createElement('span', { className: "text-base sm:text-lg" }, "🎯"),
-                React.createElement('span', null, "Luyện tập theo mức độ:"),
-                React.createElement('span', {
-                  className: "bg-indigo-100 text-indigo-850 text-[11px] sm:text-xs font-bold px-2 py-0.5 rounded-full border border-indigo-300"
-                },
-                  effectiveHiddenCount === wordStructure.expectedChars.length
-                    ? "Thử thách 100%"
-                    : `Ẩn ${effectiveHiddenCount}/${wordStructure.expectedChars.length} chữ`
-                )
-              ),
-
-              // Presets Buttons
-              React.createElement('div', { className: "flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200" },
-                [
-                  { key: '1_char', label: '1 chữ', icon: '🌱', tip: 'Ẩn 1 chữ cái (Dễ nhất cho người mới bắt đầu)' },
-                  { key: '50', label: '50%', icon: '⚖️', tip: 'Ẩn 50% số chữ cái' },
-                  { key: '75', label: '75%', icon: '🔥', tip: 'Ẩn 75% số chữ cái' },
-                  { key: 'all', label: '100%', icon: '🏆', tip: 'Ẩn toàn bộ từ (Thử thách tối đa)' }
-                ].map(preset => {
-                  const isActive = difficultyMode === preset.key;
-                  return React.createElement('button', {
-                    key: preset.key,
-                    type: "button",
-                    onClick: () => handleSetDifficultyMode(preset.key),
-                    title: preset.tip,
-                    className: `px-2 sm:px-2.5 py-1 rounded-lg text-xs font-extrabold cursor-pointer transition-all flex items-center gap-1 ${
-                      isActive
-                        ? 'bg-indigo-600 text-white shadow-xs scale-102 ring-2 ring-indigo-300'
-                        : 'text-slate-600 hover:text-indigo-700 hover:bg-white'
-                    }`
-                  },
-                    React.createElement('span', null, preset.icon),
-                    React.createElement('span', null, preset.label)
-                  );
-                })
-              )
-            ),
-
-            // Bottom Row: Tăng giảm số lượng chữ bị ẩn chính xác [-] [ N chữ ] [+]
-            React.createElement('div', {
-              className: "flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-indigo-50 text-xs font-semibold text-slate-600"
-            },
-              React.createElement('div', { className: "flex items-center gap-2" },
-                React.createElement('span', { className: "text-slate-600 font-bold hidden sm:inline text-[11px]" }, "Tùy chỉnh số chữ ẩn:"),
-                React.createElement('div', { className: "flex items-center gap-1 bg-indigo-50/90 border border-indigo-200 rounded-xl p-0.5" },
-                  React.createElement('button', {
-                    type: "button",
-                    onClick: () => handleAdjustCustomHidden(-1),
-                    disabled: effectiveHiddenCount <= 1,
-                    title: "Giảm số chữ bị ẩn (làm bài dễ hơn)",
-                    className: "w-7 h-7 flex items-center justify-center rounded-lg bg-white hover:bg-indigo-100 disabled:opacity-40 disabled:cursor-not-allowed text-indigo-700 font-black text-sm shadow-2xs cursor-pointer active:scale-95 transition"
-                  }, "−"),
-
-                  React.createElement('span', { className: "px-2 text-xs font-extrabold text-indigo-900 min-w-[70px] text-center" },
-                    `${effectiveHiddenCount} chữ cái`
-                  ),
-
-                  React.createElement('button', {
-                    type: "button",
-                    onClick: () => handleAdjustCustomHidden(1),
-                    disabled: effectiveHiddenCount >= wordStructure.expectedChars.length,
-                    title: "Tăng số chữ bị ẩn (tăng độ khó khi học thuộc)",
-                    className: "w-7 h-7 flex items-center justify-center rounded-lg bg-white hover:bg-indigo-100 disabled:opacity-40 disabled:cursor-not-allowed text-indigo-700 font-black text-sm shadow-2xs cursor-pointer active:scale-95 transition"
-                  }, "+")
-                )
-              ),
-
-              // Explanatory Guidance
-              React.createElement('div', { className: "text-[11px] sm:text-xs text-indigo-900/80 font-bold ml-auto flex items-center gap-1.5" },
-                effectiveHiddenCount === wordStructure.expectedChars.length ?
-                  React.createElement('span', { className: "text-amber-800 bg-amber-50 px-2.5 py-0.5 rounded-lg border border-amber-200 font-extrabold" },
-                    "⭐ Thử thách: Tự nhớ và ghép lại toàn bộ từ"
-                  ) :
-                  React.createElement('span', { className: "text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-lg border border-emerald-200 font-extrabold" },
-                    `💡 Hiện sẵn ${wordStructure.expectedChars.length - effectiveHiddenCount} chữ gợi ý, cần điền ${effectiveHiddenCount} chữ còn thiếu`
-                  )
-              )
             )
           ),
 
@@ -2922,11 +2719,7 @@ high school | Trường cấp ba 🏫`;
               className: "w-full max-w-xl bg-emerald-50 border border-emerald-300 text-emerald-800 font-extrabold px-4 py-1.5 rounded-2xl flex items-center justify-center gap-2 shadow-xs my-0.5 text-xs sm:text-sm"
             },
               React.createElement('span', { className: "text-base" }, "👉"),
-              React.createElement('span', null,
-                effectiveHiddenCount === wordStructure.expectedChars.length ?
-                  "Bấm chọn các chữ cái theo trật tự đúng để ghép thành từ!" :
-                  `Bấm chọn ${effectiveHiddenCount} chữ cái còn thiếu để điền vào các ô dấu hỏi "?"`
-              )
+              React.createElement('span', null, "Bây giờ hãy bấm chọn các chữ cái theo trật tự đúng!")
             ) : null,
 
           // TARGET LETTER DISPLAY (Responsive phrase display with no horizontal scrollbar needed)
@@ -2957,16 +2750,12 @@ high school | Trường cấp ba 🏫`;
                       ec => ec.wordIndex === wIdx && ec.charIndex === cIdx
                     );
                     const gIdx = targetObj ? targetObj.globalIndex : 0;
-                    const isHidden = hiddenCharIndices.has(gIdx);
-                    const placedTile = isHidden
-                      ? playerPlacedTiles.find(t => t.globalIndex === gIdx)
-                      : null;
-                    const isCurrentSlot = isHidden && !isWordDone && !isSpellingActive && (sortedHiddenIndices[playerPlacedTiles.length] === gIdx);
+                    const placedTile = playerPlacedTiles[gIdx];
+                    const isCurrentSlot = playerPlacedTiles.length === gIdx && !isWordDone && !isSpellingActive;
                     const isAudioHighlighted = highlightedGlobalIdx === gIdx;
 
                     let displayChar = '';
                     let slotStyle = '';
-                    let slotTitle = '';
 
                     if (isWordDone) {
                       displayChar = expectedChar;
@@ -2977,45 +2766,28 @@ high school | Trường cấp ba 🏫`;
                       if (isAudioHighlighted) {
                         slotStyle = 'bg-amber-300 border-3 border-amber-500 text-amber-950 scale-115 shadow-xl ring-4 ring-amber-300 font-black animate-pulse z-10';
                       } else {
-                        slotStyle = isHidden
-                          ? 'bg-purple-100/90 border-2 border-dashed border-purple-300 text-purple-900 font-black shadow-xs'
-                          : 'bg-indigo-50/90 border-2 border-indigo-200 text-indigo-900 font-black shadow-xs';
+                        slotStyle = 'bg-white/95 border-2 border-purple-200 text-purple-900 font-black shadow-sm';
                       }
                     } else {
-                      // Trạng thái ghép từ
-                      if (!isHidden) {
-                        // Ký tự được hiện sẵn làm gợi ý định hình từ
-                        displayChar = expectedChar;
-                        slotStyle = 'bg-emerald-50/90 border-2 border-emerald-300 text-emerald-800 font-black shadow-xs cursor-pointer hover:bg-emerald-100';
-                        slotTitle = `Chữ gợi ý sẵn: ${expectedChar} (Bấm để nghe phát âm)`;
+                      // Sau khi nghe đánh vần xong: chữ biến mất để học sinh bấm chọn
+                      if (placedTile) {
+                        displayChar = placedTile.char;
+                        slotStyle = 'bg-gradient-to-b from-purple-500 to-indigo-600 text-white shadow-md border-2 border-purple-400 cursor-pointer hover:scale-105';
+                      } else if (isCurrentSlot) {
+                        displayChar = '';
+                        slotStyle = 'bg-purple-100 border-2 border-dashed border-purple-500 text-purple-400 shadow-inner';
                       } else {
-                        // Ký tự bị ẩn cần người học tìm và điền vào
-                        if (placedTile) {
-                          displayChar = placedTile.char;
-                          slotStyle = 'bg-gradient-to-b from-purple-500 to-indigo-600 text-white shadow-md border-2 border-purple-400 cursor-pointer hover:scale-105';
-                          slotTitle = "Bấm để xóa chữ này";
-                        } else if (isCurrentSlot) {
-                          displayChar = '?';
-                          slotStyle = 'bg-purple-100 border-2 border-dashed border-purple-500 text-purple-600 font-black shadow-inner animate-pulse';
-                          slotTitle = "Ô cần điền chữ cái tiếp theo";
-                        } else {
-                          displayChar = '?';
-                          slotStyle = 'bg-slate-100 border-2 border-dashed border-slate-300 text-slate-400 font-bold';
-                          slotTitle = "Chữ cái bị ẩn";
-                        }
+                        displayChar = '';
+                        slotStyle = 'bg-slate-100 border-2 border-dashed border-slate-300 text-slate-300';
                       }
                     }
 
                     return React.createElement('div', {
                       key: cIdx,
                       onClick: () => {
-                        if (placedTile && !isWordDone && !isSpellingActive) {
-                          handleUndoLast();
-                        } else if (!isHidden && !isWordDone && !isSpellingActive) {
-                          speakLetter(expectedChar, { voice: selectedVoice, mode: spellingMode });
-                        }
+                        if (placedTile && !isWordDone && !isSpellingActive) handleUndoLast();
                       },
-                      title: slotTitle || undefined,
+                      title: placedTile ? "Bấm để xóa chữ này" : undefined,
                       className: `${slotSizeClass} rounded-xl sm:rounded-2xl flex items-center justify-center font-black transition-all select-none duration-150 shrink-0 ${slotStyle}`
                     }, displayChar);
                   })
@@ -3054,9 +2826,7 @@ high school | Trường cấp ba 🏫`;
               React.createElement('span', null,
                 isSpellingActive ?
                   "🎧 Đang nghe đánh vần mẫu..." :
-                  effectiveHiddenCount === wordStructure.expectedChars.length ?
-                    "Bấm chọn các chữ cái bên dưới theo thứ tự:" :
-                    `Bấm chọn các chữ cái còn thiếu bên dưới (${effectiveHiddenCount} chữ):`
+                  "Bấm chọn các chữ cái bên dưới:"
               ),
               playerPlacedTiles.length > 0 && !isWordDone && !isSpellingActive && React.createElement('div', { className: "flex items-center gap-2" },
                 React.createElement('button', {
