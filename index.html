@@ -2587,82 +2587,75 @@ high school | Trường cấp ba 🏫`;
               React.createElement('span', null, "Bây giờ hãy bấm chọn các chữ cái theo trật tự đúng!")
             ) : null,
 
-          // TARGET LETTER DISPLAY (All Words on the Same Line separated by clean whitespace gap)
+          // TARGET LETTER DISPLAY (Responsive phrase display with no horizontal scrollbar needed)
           React.createElement('div', {
             className: "w-full min-h-[130px] bg-gradient-to-br from-violet-50/90 to-sky-50/90 p-3 sm:p-5 rounded-3xl border-2 border-purple-200 shadow-inner flex flex-col items-center justify-center my-1"
           },
-            // Continuous Horizontal Row
+            // Responsive Wrap Row by Words - No scrollbar needed
             React.createElement('div', {
-              className: "w-full overflow-x-auto py-2 px-1 flex items-center justify-center flex-nowrap scrollbar-thin scrollbar-thumb-purple-200"
+              className: "w-full py-2 px-1 flex flex-wrap items-center justify-center gap-x-3 sm:gap-x-5 gap-y-2.5 sm:gap-y-3"
             },
               wordStructure.words.map((word, wIdx) => {
                 const charsInWord = word.split('');
                 const totalChars = wordStructure.expectedChars.length;
-                const slotSizeClass = totalChars > 11 ?
-                  "w-8 h-11 sm:w-10 sm:h-13 md:w-12 md:h-15 text-lg sm:text-xl md:text-2xl" :
-                  totalChars > 7 ?
-                  "w-9 h-12 sm:w-12 sm:h-15 md:w-13 md:h-16 text-xl sm:text-2xl md:text-3xl" :
+                const slotSizeClass = totalChars > 14 ?
+                  "w-7 h-9 sm:w-8 sm:h-11 md:w-9 md:h-12 text-base sm:text-lg md:text-xl" :
+                  totalChars > 10 ?
+                  "w-8 h-10 sm:w-9 sm:h-12 md:w-11 md:h-14 text-lg sm:text-xl md:text-2xl" :
+                  totalChars > 6 ?
+                  "w-9 h-12 sm:w-11 sm:h-14 md:w-12 md:h-15 text-xl sm:text-2xl md:text-3xl" :
                   "w-11 h-14 sm:w-14 sm:h-17 md:w-16 md:h-18 text-2xl sm:text-3xl md:text-4xl";
 
-                return React.createElement(React.Fragment, { key: wIdx },
-                  // Word Letter Slots Group
-                  React.createElement('div', {
-                    className: "flex items-center gap-1 sm:gap-1.5 shrink-0 bg-white/70 border border-purple-200/80 rounded-2xl p-1.5 sm:p-2 shadow-xs"
-                  },
-                    charsInWord.map((expectedChar, cIdx) => {
-                      const targetObj = wordStructure.expectedChars.find(
-                        ec => ec.wordIndex === wIdx && ec.charIndex === cIdx
-                      );
-                      const gIdx = targetObj ? targetObj.globalIndex : 0;
-                      const placedTile = playerPlacedTiles[gIdx];
-                      const isCurrentSlot = playerPlacedTiles.length === gIdx && !isWordDone && !isSpellingActive;
-                      const isAudioHighlighted = highlightedGlobalIdx === gIdx;
+                return React.createElement('div', {
+                  key: wIdx,
+                  className: "flex items-center gap-1 sm:gap-1.5 shrink-0 bg-white/80 border border-purple-200/90 rounded-2xl p-1.5 sm:p-2 shadow-xs transition-all"
+                },
+                  charsInWord.map((expectedChar, cIdx) => {
+                    const targetObj = wordStructure.expectedChars.find(
+                      ec => ec.wordIndex === wIdx && ec.charIndex === cIdx
+                    );
+                    const gIdx = targetObj ? targetObj.globalIndex : 0;
+                    const placedTile = playerPlacedTiles[gIdx];
+                    const isCurrentSlot = playerPlacedTiles.length === gIdx && !isWordDone && !isSpellingActive;
+                    const isAudioHighlighted = highlightedGlobalIdx === gIdx;
 
-                      let displayChar = '';
-                      let slotStyle = '';
+                    let displayChar = '';
+                    let slotStyle = '';
 
-                      if (isWordDone) {
-                        displayChar = expectedChar;
-                        slotStyle = 'bg-gradient-to-b from-emerald-500 to-teal-600 text-white shadow-md border-2 border-emerald-400 scale-100';
-                      } else if (isSpellingActive) {
-                        // Lúc nghe đánh vần: hiển thị đầy đủ, đánh vần tới đâu nổi bật đồng bộ tới đó
-                        displayChar = expectedChar;
-                        if (isAudioHighlighted) {
-                          slotStyle = 'bg-amber-300 border-3 border-amber-500 text-amber-950 scale-115 shadow-xl ring-4 ring-amber-300 font-black animate-pulse z-10';
-                        } else {
-                          slotStyle = 'bg-white/95 border-2 border-purple-200 text-purple-900 font-black shadow-sm';
-                        }
+                    if (isWordDone) {
+                      displayChar = expectedChar;
+                      slotStyle = 'bg-gradient-to-b from-emerald-500 to-teal-600 text-white shadow-md border-2 border-emerald-400 scale-100';
+                    } else if (isSpellingActive) {
+                      // Lúc nghe đánh vần: hiển thị đầy đủ, đánh vần tới đâu nổi bật đồng bộ tới đó
+                      displayChar = expectedChar;
+                      if (isAudioHighlighted) {
+                        slotStyle = 'bg-amber-300 border-3 border-amber-500 text-amber-950 scale-115 shadow-xl ring-4 ring-amber-300 font-black animate-pulse z-10';
                       } else {
-                        // Sau khi nghe đánh vần xong: chữ biến mất để học sinh bấm chọn
-                        if (placedTile) {
-                          displayChar = placedTile.char;
-                          slotStyle = 'bg-gradient-to-b from-purple-500 to-indigo-600 text-white shadow-md border-2 border-purple-400 cursor-pointer hover:scale-105';
-                        } else if (isCurrentSlot) {
-                          displayChar = '';
-                          slotStyle = 'bg-purple-100 border-2 border-dashed border-purple-500 text-purple-400 shadow-inner';
-                        } else {
-                          displayChar = '';
-                          slotStyle = 'bg-slate-100 border-2 border-dashed border-slate-300 text-slate-300';
-                        }
+                        slotStyle = 'bg-white/95 border-2 border-purple-200 text-purple-900 font-black shadow-sm';
                       }
+                    } else {
+                      // Sau khi nghe đánh vần xong: chữ biến mất để học sinh bấm chọn
+                      if (placedTile) {
+                        displayChar = placedTile.char;
+                        slotStyle = 'bg-gradient-to-b from-purple-500 to-indigo-600 text-white shadow-md border-2 border-purple-400 cursor-pointer hover:scale-105';
+                      } else if (isCurrentSlot) {
+                        displayChar = '';
+                        slotStyle = 'bg-purple-100 border-2 border-dashed border-purple-500 text-purple-400 shadow-inner';
+                      } else {
+                        displayChar = '';
+                        slotStyle = 'bg-slate-100 border-2 border-dashed border-slate-300 text-slate-300';
+                      }
+                    }
 
-                      return React.createElement('div', {
-                        key: cIdx,
-                        onClick: () => {
-                          if (placedTile && !isWordDone && !isSpellingActive) handleUndoLast();
-                        },
-                        title: placedTile ? "Bấm để xóa chữ này" : undefined,
-                        className: `${slotSizeClass} rounded-xl sm:rounded-2xl flex items-center justify-center font-black transition-all select-none duration-150 shrink-0 ${slotStyle}`
-                      }, displayChar);
-                    })
-                  ),
-
-                  // KHOẢNG TRỐNG CÁCH RA GIỮA CÁC TỪ TRÊN CÙNG 1 DÒNG (Không dùng ô chữ, cách ra 1 khoảng trống tự nhiên)
-                  (isMultiWord && wIdx < wordStructure.words.length - 1) &&
-                    React.createElement('div', {
-                      className: "w-6 sm:w-10 md:w-12 shrink-0 select-none pointer-events-none",
-                      'aria-hidden': "true"
-                    })
+                    return React.createElement('div', {
+                      key: cIdx,
+                      onClick: () => {
+                        if (placedTile && !isWordDone && !isSpellingActive) handleUndoLast();
+                      },
+                      title: placedTile ? "Bấm để xóa chữ này" : undefined,
+                      className: `${slotSizeClass} rounded-xl sm:rounded-2xl flex items-center justify-center font-black transition-all select-none duration-150 shrink-0 ${slotStyle}`
+                    }, displayChar);
+                  })
                 );
               })
             )
@@ -2715,39 +2708,38 @@ high school | Trường cấp ba 🏫`;
             ),
 
             React.createElement('div', {
-              className: "flex flex-wrap items-center justify-center gap-y-3 p-3 sm:p-4 bg-white rounded-3xl border-2 border-purple-200 shadow-sm w-full max-w-2xl min-h-[96px]"
+              className: "flex flex-wrap items-center justify-center gap-x-3 sm:gap-x-5 gap-y-3 p-3 sm:p-4 bg-white rounded-3xl border-2 border-purple-200 shadow-sm w-full max-w-2xl min-h-[96px]"
             },
               shuffledWordGroups.every(g => g.length === 0) && !isWordDone ?
                 React.createElement('span', { className: "text-slate-400 font-semibold text-sm" }, "Đang nạp chữ cái...") :
                 shuffledWordGroups.map((group, wIdx) => {
-                  return React.createElement(React.Fragment, { key: wIdx },
-                    // Khối các chữ cái xáo trộn của từng từ vựng
-                    React.createElement('div', {
-                      className: "flex flex-wrap items-center justify-center gap-2 sm:gap-2.5 p-1.5 sm:p-2 bg-purple-50/70 rounded-2xl border border-purple-100/90 shadow-xs"
-                    },
-                      group.map((tile, tIdx) => {
-                        const isIncorrect = incorrectTileId === tile.id;
-                        const colorClass = pastelLetterColors[(tile.wordIndex * 4 + tIdx) % pastelLetterColors.length];
+                  const totalChars = wordStructure.expectedChars.length;
+                  const tileBtnSizeClass = totalChars > 14 ?
+                    "w-9 h-11 sm:w-10 sm:h-12 md:w-11 md:h-13 text-lg sm:text-xl md:text-2xl" :
+                    totalChars > 10 ?
+                    "w-10 h-12 sm:w-11 sm:h-13 md:w-12 md:h-14 text-xl sm:text-2xl md:text-2xl" :
+                    "w-11 h-13 sm:w-13 sm:h-15 md:w-14 md:h-16 text-xl sm:text-2xl md:text-3xl";
 
-                        return React.createElement('button', {
-                          key: tile.id,
-                          onClick: () => handleTileClick(tile),
-                          disabled: isWordDone,
-                          className: `w-11 h-13 sm:w-13 sm:h-15 md:w-14 md:h-16 rounded-2xl text-xl sm:text-2xl md:text-3xl font-black border-b-4 transition-all duration-150 transform hover:-translate-y-1 active:translate-y-0.5 active:border-b-2 shadow-md select-none ${
-                            isIncorrect ?
-                              'border-rose-500 bg-rose-100 text-rose-700 animate-shake' :
-                              `${colorClass} border-slate-300`
-                          } ${isWordDone ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`
-                        }, tile.char);
-                      })
-                    ),
+                  // Khối các chữ cái xáo trộn của từng từ vựng
+                  return React.createElement('div', {
+                    key: wIdx,
+                    className: "flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 p-1.5 sm:p-2 bg-purple-50/70 rounded-2xl border border-purple-100/90 shadow-xs"
+                  },
+                    group.map((tile, tIdx) => {
+                      const isIncorrect = incorrectTileId === tile.id;
+                      const colorClass = pastelLetterColors[(tile.wordIndex * 4 + tIdx) % pastelLetterColors.length];
 
-                    // Khoảng trống tương ứng với từ vựng trong ô xáo trộn!
-                    (wIdx < shuffledWordGroups.length - 1) &&
-                      React.createElement('div', {
-                        className: "w-6 sm:w-10 md:w-12 shrink-0 select-none pointer-events-none",
-                        'aria-hidden': "true"
-                      })
+                      return React.createElement('button', {
+                        key: tile.id,
+                        onClick: () => handleTileClick(tile),
+                        disabled: isWordDone,
+                        className: `${tileBtnSizeClass} rounded-2xl font-black border-b-4 transition-all duration-150 transform hover:-translate-y-1 active:translate-y-0.5 active:border-b-2 shadow-md select-none ${
+                          isIncorrect ?
+                            'border-rose-500 bg-rose-100 text-rose-700 animate-shake' :
+                            `${colorClass} border-slate-300`
+                        } ${isWordDone ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`
+                      }, tile.char);
+                    })
                   );
                 })
             )
