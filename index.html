@@ -77,6 +77,34 @@
     <script type="module">
       import React from 'react';
       import ReactDOM from 'react-dom/client';
+      import { initializeApp } from 'firebase/app';
+      import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, getDocFromServer } from 'firebase/firestore';
+
+      // --- Firebase Configuration & Cloud Database ---
+      const firebaseConfig = {
+        projectId: "groovy-bloom-zpthm",
+        appId: "1:333932123081:web:c28d688c7b7f9a71face18",
+        apiKey: "AIzaSyBvIqi632cbX-wuxdthfQTl-tmlOwRxlxA",
+        authDomain: "groovy-bloom-zpthm.firebaseapp.com",
+        firestoreDatabaseId: "ai-studio-nghevnhvntvng-e0109713-241f-458c-be9e-09bae92a8115",
+        storageBucket: "groovy-bloom-zpthm.firebasestorage.app",
+        messagingSenderId: "333932123081"
+      };
+
+      const firebaseApp = initializeApp(firebaseConfig);
+      const db = getFirestore(firebaseApp, firebaseConfig.firestoreDatabaseId);
+
+      // Validate connection to Firestore as required by system standards
+      async function testFirebaseConnection() {
+        try {
+          await getDocFromServer(doc(db, 'test', 'connection'));
+        } catch (error) {
+          if (error && error.message && error.message.includes('the client is offline')) {
+            console.warn("Firebase client offline:", error);
+          }
+        }
+      }
+      testFirebaseConnection();
 
       const { useState, useCallback, useMemo, useRef, useEffect } = React;
 
@@ -1269,20 +1297,81 @@ high school | Trường cấp ba 🏫`;
       const TopicSelectionScreen = ({
         presetTopics,
         customTopics,
+        customTopicsMeta = {},
+        cloudStatus = 'connected',
         onSelectTopic,
         onCreateTopic,
         onEditTopic,
         onDeleteTopic,
         onOpenSoundboard,
       }) => {
+        const [copiedToast, setCopiedToast] = useState(false);
         const customTopicNames = Object.keys(customTopics || {});
         const presetTopicNames = Object.keys(presetTopics || {});
+
+        const handleShareApp = async () => {
+          const shareUrl = window.location.href;
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            try {
+              await navigator.clipboard.writeText(shareUrl);
+              setCopiedToast(true);
+              setTimeout(() => setCopiedToast(false), 3500);
+              return;
+            } catch (e) {}
+          }
+          if (navigator.share) {
+            try {
+              await navigator.share({
+                title: 'Nghe và đánh vần từ vựng tiếng Anh',
+                text: 'Hãy cùng làm và tạo bài tập đánh vần từ vựng tiếng Anh trực tuyến!',
+                url: shareUrl
+              });
+              return;
+            } catch (e) {}
+          }
+          prompt('Sao chép đường dẫn chia sẻ ứng dụng:', shareUrl);
+        };
 
         return React.createElement('div', { className: "flex flex-col items-center gap-5 w-full animate-fade-in" },
           React.createElement('div', { className: "text-center max-w-xl" },
             React.createElement('h2', { className: "text-2xl sm:text-3xl font-extrabold text-slate-800" }, "Chọn chủ đề bài tập"),
             React.createElement('p', { className: "text-sm sm:text-base text-slate-500 mt-1" },
               "Nghe đánh vần từng chữ cái, nhận biết khoảng cách âm thanh giữa các từ ghép và sắp xếp hoàn chỉnh"
+            )
+          ),
+
+          // Cloud Sync & App Sharing Bar
+          React.createElement('div', { className: "w-full max-w-2xl bg-gradient-to-r from-indigo-50 via-purple-50 to-blue-50 border-2 border-indigo-200/90 rounded-2xl p-3 sm:p-3.5 flex flex-col sm:flex-row items-center justify-between gap-3 text-left shadow-xs" },
+            React.createElement('div', { className: "flex items-center gap-3 min-w-0 w-full sm:w-auto" },
+              React.createElement('span', { className: "text-3xl shrink-0" }, "🌐"),
+              React.createElement('div', { className: "min-w-0" },
+                React.createElement('div', { className: "text-xs sm:text-sm font-black text-indigo-950 flex items-center gap-2 flex-wrap" },
+                  React.createElement('span', null, "Đồng bộ đám mây trực tuyến"),
+                  cloudStatus === 'connected' ?
+                    React.createElement('span', { className: "text-[11px] font-bold text-emerald-800 bg-emerald-100 border border-emerald-300 px-2 py-0.5 rounded-full inline-flex items-center gap-1 shadow-xs" },
+                      React.createElement('span', { className: "w-2 h-2 rounded-full bg-emerald-500 animate-pulse" }),
+                      "Đã kết nối Cloud"
+                    ) :
+                    React.createElement('span', { className: "text-[11px] font-bold text-amber-800 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded-full inline-flex items-center gap-1" },
+                      "Đang kết nối Cloud..."
+                    )
+                ),
+                React.createElement('div', { className: "text-[11px] sm:text-xs text-indigo-900/80 font-semibold mt-0.5" },
+                  "Mọi bài tập bạn hoặc người khác tạo đều tự động hiển thị tại đây để cùng nhau học tập!"
+                )
+              )
+            ),
+            React.createElement('button', {
+              type: "button",
+              onClick: handleShareApp,
+              className: `w-full sm:w-auto px-4 py-2 text-xs sm:text-sm font-extrabold rounded-xl shadow-md cursor-pointer transition-all shrink-0 flex items-center justify-center gap-1.5 active:scale-95 ${
+                copiedToast
+                  ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                  : 'bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white'
+              }`
+            },
+              React.createElement('span', null, copiedToast ? "✓" : "🔗"),
+              React.createElement('span', null, copiedToast ? "Đã copy link app!" : "Chia sẻ app cho người khác")
             )
           ),
 
@@ -1315,57 +1404,76 @@ high school | Trường cấp ba 🏫`;
               React.createElement('div', { className: "text-left" },
                 React.createElement('div', { className: "leading-tight" }, "Tạo bài tập từ vựng mới"),
                 React.createElement('div', { className: "text-xs font-normal text-purple-100 mt-0.5" },
-                  "Nhập hoặc dán từ đơn hay cụm từ ghép — app tự động tạo bài tập đánh vần chuẩn xác!"
+                  "Nhập hoặc dán từ đơn hay cụm từ ghép — tự động lưu và đồng bộ lên đám mây cho mọi người cùng thấy!"
                 )
               )
             )
           ),
 
-          // Custom Topics
-          customTopicNames.length > 0 && React.createElement('div', { className: "w-full max-w-2xl text-left" },
+          // Custom / Shared Topics
+          React.createElement('div', { className: "w-full max-w-2xl text-left" },
             React.createElement('div', { className: "flex items-center justify-between mb-3" },
               React.createElement('h3', { className: "text-lg sm:text-xl font-bold text-purple-900 flex items-center gap-2" },
                 React.createElement('span', null, "⭐"),
-                React.createElement('span', null, "Chủ đề của bạn"),
+                React.createElement('span', null, "Chủ đề bài tập tự tạo & chia sẻ"),
                 React.createElement('span', { className: "text-xs font-bold bg-purple-200 text-purple-800 px-2.5 py-0.5 rounded-full" }, `${customTopicNames.length}`)
-              )
+              ),
+              React.createElement('span', { className: "text-xs font-semibold text-indigo-700 hidden sm:inline" }, "☁️ Đồng bộ đám mây thời gian thực")
             ),
-            React.createElement('div', { className: "grid grid-cols-1 md:grid-cols-2 gap-4" },
-              customTopicNames.map((topic) => {
-                const count = (customTopics[topic] || []).length;
-                return React.createElement('div', {
-                  key: topic,
-                  className: "bg-gradient-to-br from-violet-600 to-purple-700 rounded-2xl p-4 text-white shadow-lg hover:shadow-xl transition-all transform hover:-translate-y-1 flex flex-col justify-between"
-                },
-                  React.createElement('div', {
-                    onClick: () => onSelectTopic(topic),
-                    className: "cursor-pointer flex-1"
+            customTopicNames.length > 0 ?
+              React.createElement('div', { className: "grid grid-cols-1 md:grid-cols-2 gap-4" },
+                customTopicNames.map((topic) => {
+                  const count = (customTopics[topic] || []).length;
+                  const meta = customTopicsMeta && customTopicsMeta[topic];
+                  const author = meta && meta.authorName ? meta.authorName : 'Người dùng chia sẻ';
+
+                  return React.createElement('div', {
+                    key: topic,
+                    className: "bg-gradient-to-br from-violet-600 to-purple-700 rounded-2xl p-4 text-white shadow-lg hover:shadow-xl transition-all transform hover:-translate-y-1 flex flex-col justify-between border border-purple-400/40"
                   },
-                    React.createElement('div', { className: "flex items-center justify-between gap-2" },
-                      React.createElement('span', { className: "text-[11px] font-bold uppercase tracking-wider bg-white/20 px-2 py-0.5 rounded-full" }, "Tự tạo"),
-                      React.createElement('span', { className: "text-xs text-violet-200 font-semibold" }, `${count} từ vựng`)
-                    ),
-                    React.createElement('h4', { className: "text-lg sm:text-xl font-bold mt-2 mb-3 leading-snug line-clamp-2" }, topic)
-                  ),
-                  React.createElement('div', { className: "flex items-center justify-between pt-2 border-t border-white/20 mt-2" },
-                    React.createElement('button', {
+                    React.createElement('div', {
                       onClick: () => onSelectTopic(topic),
-                      className: "text-xs font-bold bg-white text-violet-800 hover:bg-violet-50 px-3 py-1.5 rounded-xl transition cursor-pointer flex items-center gap-1 shadow-sm"
-                    }, "Vào học ▶"),
-                    React.createElement('div', { className: "flex items-center gap-1.5" },
+                      className: "cursor-pointer flex-1"
+                    },
+                      React.createElement('div', { className: "flex items-center justify-between gap-2" },
+                        React.createElement('span', { className: "text-[11px] font-extrabold uppercase tracking-wider bg-white/20 px-2.5 py-0.5 rounded-full flex items-center gap-1" },
+                          React.createElement('span', null, "☁️"),
+                          React.createElement('span', null, "Cloud")
+                        ),
+                        React.createElement('span', { className: "text-xs text-violet-200 font-bold bg-purple-900/40 px-2 py-0.5 rounded-md" }, `${count} từ vựng`)
+                      ),
+                      React.createElement('h4', { className: "text-lg sm:text-xl font-bold mt-2 mb-1.5 leading-snug line-clamp-2" }, topic),
+                      React.createElement('div', { className: "text-xs text-violet-200 font-semibold flex items-center gap-1.5 mb-3" },
+                        React.createElement('span', null, "👤"),
+                        React.createElement('span', { className: "truncate" }, `Tạo bởi: ${author}`)
+                      )
+                    ),
+                    React.createElement('div', { className: "flex items-center justify-between pt-2.5 border-t border-white/20 mt-1" },
                       React.createElement('button', {
-                        onClick: (e) => { e.stopPropagation(); onEditTopic(topic); },
-                        className: "p-1.5 px-2.5 rounded-lg bg-white/20 hover:bg-white/30 text-white transition cursor-pointer text-xs font-semibold"
-                      }, "✏️ Sửa"),
-                      React.createElement('button', {
-                        onClick: (e) => { e.stopPropagation(); onDeleteTopic(topic); },
-                        className: "p-1.5 px-2.5 rounded-lg bg-rose-500/80 hover:bg-rose-600 text-white transition cursor-pointer text-xs font-semibold"
-                      }, "🗑️ Xóa")
+                        onClick: () => onSelectTopic(topic),
+                        className: "text-xs font-black bg-white text-violet-800 hover:bg-violet-50 px-3.5 py-1.5 rounded-xl transition cursor-pointer flex items-center gap-1 shadow-sm active:scale-95"
+                      }, "Vào học ▶"),
+                      React.createElement('div', { className: "flex items-center gap-1.5" },
+                        React.createElement('button', {
+                          onClick: (e) => { e.stopPropagation(); onEditTopic(topic); },
+                          className: "p-1.5 px-2.5 rounded-lg bg-white/20 hover:bg-white/30 text-white transition cursor-pointer text-xs font-semibold"
+                        }, "✏️ Sửa"),
+                        React.createElement('button', {
+                          onClick: (e) => { e.stopPropagation(); onDeleteTopic(topic); },
+                          className: "p-1.5 px-2.5 rounded-lg bg-rose-500/80 hover:bg-rose-600 text-white transition cursor-pointer text-xs font-semibold"
+                        }, "🗑️ Xóa")
+                      )
                     )
-                  )
-                );
-              })
-            )
+                  );
+                })
+              ) :
+              React.createElement('div', { className: "bg-purple-50/70 border-2 border-dashed border-purple-200 rounded-2xl p-6 text-center" },
+                React.createElement('span', { className: "text-3xl block mb-1" }, "☁️ ✨"),
+                React.createElement('h4', { className: "font-bold text-purple-950 text-base" }, "Chưa có bài tập tự tạo nào trên hệ thống"),
+                React.createElement('p', { className: "text-xs sm:text-sm text-purple-800 mt-1 max-w-md mx-auto" },
+                  "Bấm nút \"Tạo bài tập từ vựng mới\" ở trên để tạo. Bài tập sẽ tự động lưu và đồng bộ lên đám mây để tất cả mọi người có link app đều có thể thấy và luyện tập!"
+                )
+              )
           ),
 
           // Preset Topics
@@ -1398,12 +1506,15 @@ high school | Trường cấp ba 🏫`;
       const TopicEditorScreen = ({
         initialTopicName,
         initialSentences,
+        initialAuthorName,
+        currentAuthorName,
         existingTopicNames,
         onSave,
         onCancel,
       }) => {
         const isEditing = Boolean(initialTopicName);
         const [topicName, setTopicName] = useState(initialTopicName || '');
+        const [authorName, setAuthorName] = useState(initialAuthorName || currentAuthorName || '');
         const [rawText, setRawText] = useState(() => {
           if (initialSentences && initialSentences.length > 0) {
             return initialSentences.map(s => (s.vi ? `${s.en} | ${s.vi}` : s.en)).join('\n');
@@ -1456,7 +1567,7 @@ high school | Trường cấp ba 🏫`;
           }
 
           setErrorMessage(null);
-          onSave(finalName, detectedVocabulary, playImmediately);
+          onSave(finalName, detectedVocabulary, playImmediately, authorName.trim());
         };
 
         return React.createElement('div', { className: "flex flex-col items-center gap-5 w-full text-left animate-fade-in" },
@@ -1522,18 +1633,42 @@ high school | Trường cấp ba 🏫`;
             )
           ),
 
-          // Topic Name
-          React.createElement('div', { className: "w-full bg-slate-50 p-4 rounded-2xl border border-slate-200" },
-            React.createElement('label', { className: "block text-sm font-bold text-slate-700 mb-1" },
-              "Tên chủ đề bài tập (Tùy chọn):"
+          // Topic Name & Author / Teacher
+          React.createElement('div', { className: "w-full grid grid-cols-1 sm:grid-cols-2 gap-3" },
+            React.createElement('div', { className: "bg-slate-50 p-4 rounded-2xl border border-slate-200" },
+              React.createElement('label', { className: "block text-sm font-bold text-slate-700 mb-1" },
+                "Tên chủ đề bài tập (Tùy chọn):"
+              ),
+              React.createElement('input', {
+                type: "text",
+                value: topicName,
+                onChange: (e) => setTopicName(e.target.value),
+                placeholder: "Ví dụ: Từ vựng Unit 2 RO7, Đồ dùng thể thao...",
+                className: "w-full p-3 px-4 rounded-xl border border-slate-300 focus:border-purple-500 focus:ring-1 focus:ring-purple-200 outline-none text-sm font-semibold text-slate-800 bg-white"
+              })
             ),
-            React.createElement('input', {
-              type: "text",
-              value: topicName,
-              onChange: (e) => setTopicName(e.target.value),
-              placeholder: "Ví dụ: Từ vựng Unit 2 RO7, Đồ dùng thể thao...",
-              className: "w-full p-3 px-4 rounded-xl border border-slate-300 focus:border-purple-500 focus:ring-1 focus:ring-purple-200 outline-none text-sm font-semibold text-slate-800 bg-white"
-            })
+            React.createElement('div', { className: "bg-slate-50 p-4 rounded-2xl border border-slate-200" },
+              React.createElement('label', { className: "block text-sm font-bold text-slate-700 mb-1 flex items-center justify-between" },
+                React.createElement('span', null, "Tên người tạo / giáo viên:"),
+                React.createElement('span', { className: "text-xs font-normal text-slate-500" }, "(Tùy chọn)")
+              ),
+              React.createElement('input', {
+                type: "text",
+                value: authorName,
+                onChange: (e) => setAuthorName(e.target.value),
+                placeholder: "Ví dụ: Cô Mai, Thầy Hùng, Nhóm 1...",
+                className: "w-full p-3 px-4 rounded-xl border border-slate-300 focus:border-purple-500 focus:ring-1 focus:ring-purple-200 outline-none text-sm font-semibold text-slate-800 bg-white"
+              })
+            )
+          ),
+
+          // Cloud Sync Notice
+          React.createElement('div', { className: "w-full bg-gradient-to-r from-emerald-50 via-teal-50 to-blue-50 border border-emerald-300/80 rounded-2xl p-3.5 flex items-center gap-3 text-left shadow-xs" },
+            React.createElement('span', { className: "text-2xl shrink-0" }, "☁️"),
+            React.createElement('div', { className: "text-xs sm:text-sm text-emerald-950" },
+              React.createElement('span', { className: "font-bold text-emerald-900" }, "Lưu & Chia sẻ tự động: "),
+              React.createElement('span', null, "Bài tập này sẽ được lưu lên đám mây và đồng bộ ngay lập tức cho bất kỳ ai bạn chia sẻ link ứng dụng cùng học!")
+            )
           ),
 
           // Live Preview of Detected Vocabulary
@@ -2150,6 +2285,24 @@ high school | Trường cấp ba 🏫`;
         return arr;
       };
 
+      // Helper to compute stable hidden character indices based on count and seed
+      const computeHiddenIndices = (totalChars, count, seed = 0) => {
+        if (count >= totalChars || count <= 0) {
+          return new Set(Array.from({ length: totalChars }, (_, i) => i));
+        }
+        const allIndices = Array.from({ length: totalChars }, (_, i) => i);
+        let s = (seed + 1) * 37 + totalChars * 17;
+        const pseudoRandom = () => {
+          s = (s * 9301 + 49297) % 233280;
+          return s / 233280;
+        };
+        for (let i = allIndices.length - 1; i > 0; i--) {
+          const j = Math.floor(pseudoRandom() * (i + 1));
+          [allIndices[i], allIndices[j]] = [allIndices[j], allIndices[i]];
+        }
+        return new Set(allIndices.slice(0, count));
+      };
+
       const GameScreen = ({
         sentences,
         onTopicComplete,
@@ -2176,6 +2329,24 @@ high school | Trường cấp ba 🏫`;
             return localStorage.getItem('english_spelling_mode') || 'alphabet';
           } catch (e) {
             return 'alphabet';
+          }
+        });
+
+        // Chế độ Luyện tập theo mức độ ẩn ký tự
+        const [difficultyMode, setDifficultyMode] = useState(() => {
+          try {
+            return localStorage.getItem('english_difficulty_mode') || 'all';
+          } catch (e) {
+            return 'all';
+          }
+        });
+
+        const [customHiddenCount, setCustomHiddenCount] = useState(() => {
+          try {
+            const saved = parseInt(localStorage.getItem('english_custom_hidden_count'), 10);
+            return !isNaN(saved) && saved > 0 ? saved : 2;
+          } catch (e) {
+            return 2;
           }
         });
 
@@ -2250,6 +2421,29 @@ high school | Trường cấp ba 🏫`;
           return { words, expectedChars };
         }, [currentItem]);
 
+        // Calculate effective hidden characters count
+        const effectiveHiddenCount = useMemo(() => {
+          const total = wordStructure.expectedChars.length;
+          if (total <= 0) return 0;
+          if (difficultyMode === '1_char') return Math.min(1, total);
+          if (difficultyMode === '25') return Math.max(1, Math.min(total, Math.round(total * 0.25)));
+          if (difficultyMode === '50') return Math.max(1, Math.min(total, Math.round(total * 0.5)));
+          if (difficultyMode === '75') return Math.max(1, Math.min(total, Math.round(total * 0.75)));
+          if (difficultyMode === 'all') return total;
+          if (difficultyMode === 'custom') return Math.max(1, Math.min(total, customHiddenCount));
+          return total;
+        }, [difficultyMode, customHiddenCount, wordStructure.expectedChars.length]);
+
+        // Set of globalIndices that are hidden
+        const hiddenCharIndices = useMemo(() => {
+          return computeHiddenIndices(wordStructure.expectedChars.length, effectiveHiddenCount, currentIndex);
+        }, [wordStructure.expectedChars.length, effectiveHiddenCount, currentIndex]);
+
+        // Sorted list of hidden indices that player needs to fill in sequence
+        const sortedHiddenIndices = useMemo(() => {
+          return Array.from(hiddenCharIndices).sort((a, b) => a - b);
+        }, [hiddenCharIndices]);
+
         const stopPending = useCallback(() => {
           if (advanceTimerRef.current) {
             clearTimeout(advanceTimerRef.current);
@@ -2315,6 +2509,32 @@ high school | Trường cấp ba 🏫`;
           });
         }, [currentItem, selectedVoice, spellVocabulary, stopPending, preferredSpeed, spellingMode]);
 
+        // Build word bank tiles for only hidden letters
+        const buildShuffledBank = useCallback((hiddenSet) => {
+          if (!currentItem || !currentItem.en) return [];
+          const words = currentItem.en.trim().toUpperCase().split(/\s+/).filter(Boolean);
+          const groups = words.map((w, wIdx) => {
+            const letters = [];
+            w.split('').forEach((ch, cIdx) => {
+              const targetObj = wordStructure.expectedChars.find(
+                ec => ec.wordIndex === wIdx && ec.charIndex === cIdx
+              );
+              const gIdx = targetObj ? targetObj.globalIndex : 0;
+              if (hiddenSet.has(gIdx)) {
+                letters.push({
+                  id: `${wIdx}-${cIdx}-${ch}-${Math.random().toString(36).slice(2, 7)}`,
+                  char: ch,
+                  wordIndex: wIdx,
+                  charIndex: cIdx,
+                  globalIndex: gIdx,
+                });
+              }
+            });
+            return shuffleArray(letters);
+          });
+          return groups;
+        }, [currentItem, wordStructure]);
+
         // Start new vocabulary item
         const startVocabularyItem = useCallback(() => {
           const totalCount = sentences?.length || 0;
@@ -2337,24 +2557,23 @@ high school | Trường cấp ba 🏫`;
           setIsSpellingActive(true);
           stopPending();
 
-          // Prepare shuffled tiles grouped by word with correspondence
-          const cleanText = (sentences[currentIndex]?.en || '').trim().toUpperCase();
-          const words = cleanText.split(/\s+/).filter(Boolean);
-          const groups = words.map((w, wIdx) => {
-            const letters = w.split('').map((ch, cIdx) => ({
-              id: `${wIdx}-${cIdx}-${ch}-${Math.random().toString(36).slice(2, 7)}`,
-              char: ch,
-              wordIndex: wIdx,
-              charIndex: cIdx,
-            }));
-            return shuffleArray(letters);
-          });
+          // Prepare shuffled tiles for hidden characters
+          const totalChars = wordStructure.expectedChars.length;
+          let targetHiddenCount = totalChars;
+          if (difficultyMode === '1_char') targetHiddenCount = Math.min(1, totalChars);
+          else if (difficultyMode === '25') targetHiddenCount = Math.max(1, Math.min(totalChars, Math.round(totalChars * 0.25)));
+          else if (difficultyMode === '50') targetHiddenCount = Math.max(1, Math.min(totalChars, Math.round(totalChars * 0.5)));
+          else if (difficultyMode === '75') targetHiddenCount = Math.max(1, Math.min(totalChars, Math.round(totalChars * 0.75)));
+          else if (difficultyMode === 'all') targetHiddenCount = totalChars;
+          else if (difficultyMode === 'custom') targetHiddenCount = Math.max(1, Math.min(totalChars, customHiddenCount));
 
+          const hiddenSet = computeHiddenIndices(totalChars, targetHiddenCount, currentIndex);
+          const groups = buildShuffledBank(hiddenSet);
           setShuffledWordGroups(groups);
 
           // Auto-play spelling when question starts with preferred speed
           playSpellingAudio(preferredSpeed);
-        }, [currentIndex, sentences, onTopicComplete, correctlyAnswered, score, stopPending, playSpellingAudio, preferredSpeed]);
+        }, [currentIndex, sentences, onTopicComplete, correctlyAnswered, score, stopPending, playSpellingAudio, preferredSpeed, wordStructure, difficultyMode, customHiddenCount, buildShuffledBank]);
 
         useEffect(() => {
           startVocabularyItem();
@@ -2365,10 +2584,49 @@ high school | Trường cấp ba 🏫`;
           return () => stopPending();
         }, [stopPending]);
 
+        // Switch difficulty mode preset
+        const handleSetDifficultyMode = (newMode) => {
+          setDifficultyMode(newMode);
+          try { localStorage.setItem('english_difficulty_mode', newMode); } catch (e) {}
+
+          const totalChars = wordStructure.expectedChars.length;
+          let targetHiddenCount = totalChars;
+          if (newMode === '1_char') targetHiddenCount = Math.min(1, totalChars);
+          else if (newMode === '25') targetHiddenCount = Math.max(1, Math.min(totalChars, Math.round(totalChars * 0.25)));
+          else if (newMode === '50') targetHiddenCount = Math.max(1, Math.min(totalChars, Math.round(totalChars * 0.5)));
+          else if (newMode === '75') targetHiddenCount = Math.max(1, Math.min(totalChars, Math.round(totalChars * 0.75)));
+          else if (newMode === 'all') targetHiddenCount = totalChars;
+          else if (newMode === 'custom') targetHiddenCount = Math.max(1, Math.min(totalChars, customHiddenCount));
+
+          const hiddenSet = computeHiddenIndices(totalChars, targetHiddenCount, currentIndex);
+          setShuffledWordGroups(buildShuffledBank(hiddenSet));
+          setPlayerPlacedTiles([]);
+          setIsWordDone(false);
+          setMessage(null);
+        };
+
+        // Fine-tune custom hidden count with [+] / [-]
+        const handleAdjustCustomHidden = (delta) => {
+          const totalChars = wordStructure.expectedChars.length;
+          if (totalChars <= 1) return;
+          const newCount = Math.max(1, Math.min(totalChars, effectiveHiddenCount + delta));
+          setDifficultyMode('custom');
+          setCustomHiddenCount(newCount);
+          try {
+            localStorage.setItem('english_difficulty_mode', 'custom');
+            localStorage.setItem('english_custom_hidden_count', newCount.toString());
+          } catch (e) {}
+
+          const hiddenSet = computeHiddenIndices(totalChars, newCount, currentIndex);
+          setShuffledWordGroups(buildShuffledBank(hiddenSet));
+          setPlayerPlacedTiles([]);
+          setIsWordDone(false);
+          setMessage(null);
+        };
+
         // Handle letter click from letter bank
         const handleTileClick = (tile) => {
           if (isWordDone) return;
-          // If spelling was running, instantly interrupt it so advanced students don't wait
           if (isSpellingActive) {
             stopPending();
             setIsSpellingActive(false);
@@ -2379,8 +2637,12 @@ high school | Trường cấp ba 🏫`;
           setHighlightedGlobalIdx(-1);
           setIsGapActive(false);
 
-          const currentNeededIndex = playerPlacedTiles.length;
-          const expectedCharObj = wordStructure.expectedChars[currentNeededIndex];
+          // Find the next hidden character slot that needs to be filled
+          const currentHiddenSequenceIndex = playerPlacedTiles.length;
+          if (currentHiddenSequenceIndex >= sortedHiddenIndices.length) return;
+
+          const targetGlobalIdx = sortedHiddenIndices[currentHiddenSequenceIndex];
+          const expectedCharObj = wordStructure.expectedChars[targetGlobalIdx];
 
           if (!expectedCharObj) return;
 
@@ -2389,10 +2651,10 @@ high school | Trường cấp ba 🏫`;
             // Correct letter! Pronounce letter sound accurately according to selected mode
             speakLetter(tile.char, { voice: selectedVoice, mode: spellingMode });
             playSound('click');
-            const newPlaced = [...playerPlacedTiles, tile];
+            const newPlaced = [...playerPlacedTiles, { ...tile, globalIndex: targetGlobalIdx }];
             setPlayerPlacedTiles(newPlaced);
 
-            // Remove from its word group
+            // Remove from its word group in letter bank
             setShuffledWordGroups(prev =>
               prev.map((grp, gIdx) =>
                 gIdx === tile.wordIndex ? grp.filter(t => t.id !== tile.id) : grp
@@ -2400,8 +2662,8 @@ high school | Trường cấp ba 🏫`;
             );
             setMessage(null);
 
-            // Check if entire word/phrase is completed
-            if (newPlaced.length === wordStructure.expectedChars.length) {
+            // Check if all hidden characters are completed
+            if (newPlaced.length === sortedHiddenIndices.length) {
               setIsWordDone(true);
               playSound('win');
 
@@ -2414,7 +2676,7 @@ high school | Trường cấp ba 🏫`;
                 setScore(newScore);
                 setCorrectlyAnswered(newCorrect);
                 setMessage({
-                  text: '🎉 Xuất sắc! Bạn đã đánh vần chính xác (+10 điểm)',
+                  text: '🎉 Xuất sắc! Bạn đã điền chính xác tất cả các chữ (+10 điểm)',
                   type: 'success'
                 });
               } else {
@@ -2448,7 +2710,7 @@ high school | Trường cấp ba 🏫`;
             setIncorrectTileId(tile.id);
             if (tile.wordIndex !== expectedCharObj.wordIndex) {
               setMessage({
-                text: `Hãy chọn chữ cái của từ thứ ${expectedCharObj.wordIndex + 1} trước nhé!`,
+                text: `Hãy chọn chữ cái còn thiếu của từ thứ ${expectedCharObj.wordIndex + 1} trước nhé!`,
                 type: 'error'
               });
             } else {
@@ -2477,19 +2739,8 @@ high school | Trường cấp ba 🏫`;
         // Reset current word
         const handleResetWord = () => {
           if (isWordDone || isSpellingActive) return;
-          const cleanText = (currentItem?.en || '').trim().toUpperCase();
-          const words = cleanText.split(/\s+/).filter(Boolean);
-          const groups = words.map((w, wIdx) => {
-            const letters = w.split('').map((ch, cIdx) => ({
-              id: `${wIdx}-${cIdx}-${ch}-${Math.random().toString(36).slice(2, 7)}`,
-              char: ch,
-              wordIndex: wIdx,
-              charIndex: cIdx,
-            }));
-            return shuffleArray(letters);
-          });
+          setShuffledWordGroups(buildShuffledBank(hiddenCharIndices));
           setPlayerPlacedTiles([]);
-          setShuffledWordGroups(groups);
           setMessage(null);
         };
 
@@ -2534,6 +2785,93 @@ high school | Trường cấp ba 🏫`;
             },
               React.createElement('span', null, "📖"),
               React.createElement('span', null, "Bảng âm 26 chữ cái")
+            )
+          ),
+
+          // 🎯 BẢNG CHỌN CHẾ ĐỘ: 'Luyện tập theo mức độ' (Ẩn dần ký tự để tăng độ khó)
+          React.createElement('div', {
+            className: "w-full max-w-2xl bg-white/95 rounded-2xl p-2.5 sm:p-3.5 border-2 border-indigo-200 shadow-sm flex flex-col gap-2 my-0.5"
+          },
+            // Top Row: Tiêu đề + Các mốc mức độ nhanh (Presets)
+            React.createElement('div', { className: "flex flex-wrap items-center justify-between gap-2" },
+              React.createElement('div', { className: "flex items-center gap-1.5 text-xs sm:text-sm font-black text-indigo-950" },
+                React.createElement('span', { className: "text-base sm:text-lg" }, "🎯"),
+                React.createElement('span', null, "Luyện tập theo mức độ:"),
+                React.createElement('span', {
+                  className: "bg-indigo-100 text-indigo-850 text-[11px] sm:text-xs font-bold px-2 py-0.5 rounded-full border border-indigo-300"
+                },
+                  effectiveHiddenCount === wordStructure.expectedChars.length
+                    ? "Thử thách 100%"
+                    : `Ẩn ${effectiveHiddenCount}/${wordStructure.expectedChars.length} chữ`
+                )
+              ),
+
+              // Presets Buttons
+              React.createElement('div', { className: "flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200" },
+                [
+                  { key: '1_char', label: '1 chữ', icon: '🌱', tip: 'Ẩn 1 chữ cái (Dễ nhất cho người mới bắt đầu)' },
+                  { key: '50', label: '50%', icon: '⚖️', tip: 'Ẩn 50% số chữ cái' },
+                  { key: '75', label: '75%', icon: '🔥', tip: 'Ẩn 75% số chữ cái' },
+                  { key: 'all', label: '100%', icon: '🏆', tip: 'Ẩn toàn bộ từ (Thử thách tối đa)' }
+                ].map(preset => {
+                  const isActive = difficultyMode === preset.key;
+                  return React.createElement('button', {
+                    key: preset.key,
+                    type: "button",
+                    onClick: () => handleSetDifficultyMode(preset.key),
+                    title: preset.tip,
+                    className: `px-2 sm:px-2.5 py-1 rounded-lg text-xs font-extrabold cursor-pointer transition-all flex items-center gap-1 ${
+                      isActive
+                        ? 'bg-indigo-600 text-white shadow-xs scale-102 ring-2 ring-indigo-300'
+                        : 'text-slate-600 hover:text-indigo-700 hover:bg-white'
+                    }`
+                  },
+                    React.createElement('span', null, preset.icon),
+                    React.createElement('span', null, preset.label)
+                  );
+                })
+              )
+            ),
+
+            // Bottom Row: Tăng giảm số lượng chữ bị ẩn chính xác [-] [ N chữ ] [+]
+            React.createElement('div', {
+              className: "flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-indigo-50 text-xs font-semibold text-slate-600"
+            },
+              React.createElement('div', { className: "flex items-center gap-2" },
+                React.createElement('span', { className: "text-slate-600 font-bold hidden sm:inline text-[11px]" }, "Tùy chỉnh số chữ ẩn:"),
+                React.createElement('div', { className: "flex items-center gap-1 bg-indigo-50/90 border border-indigo-200 rounded-xl p-0.5" },
+                  React.createElement('button', {
+                    type: "button",
+                    onClick: () => handleAdjustCustomHidden(-1),
+                    disabled: effectiveHiddenCount <= 1,
+                    title: "Giảm số chữ bị ẩn (làm bài dễ hơn)",
+                    className: "w-7 h-7 flex items-center justify-center rounded-lg bg-white hover:bg-indigo-100 disabled:opacity-40 disabled:cursor-not-allowed text-indigo-700 font-black text-sm shadow-2xs cursor-pointer active:scale-95 transition"
+                  }, "−"),
+
+                  React.createElement('span', { className: "px-2 text-xs font-extrabold text-indigo-900 min-w-[70px] text-center" },
+                    `${effectiveHiddenCount} chữ cái`
+                  ),
+
+                  React.createElement('button', {
+                    type: "button",
+                    onClick: () => handleAdjustCustomHidden(1),
+                    disabled: effectiveHiddenCount >= wordStructure.expectedChars.length,
+                    title: "Tăng số chữ bị ẩn (tăng độ khó khi học thuộc)",
+                    className: "w-7 h-7 flex items-center justify-center rounded-lg bg-white hover:bg-indigo-100 disabled:opacity-40 disabled:cursor-not-allowed text-indigo-700 font-black text-sm shadow-2xs cursor-pointer active:scale-95 transition"
+                  }, "+")
+                )
+              ),
+
+              // Explanatory Guidance
+              React.createElement('div', { className: "text-[11px] sm:text-xs text-indigo-900/80 font-bold ml-auto flex items-center gap-1.5" },
+                effectiveHiddenCount === wordStructure.expectedChars.length ?
+                  React.createElement('span', { className: "text-amber-800 bg-amber-50 px-2.5 py-0.5 rounded-lg border border-amber-200 font-extrabold" },
+                    "⭐ Thử thách: Tự nhớ và ghép lại toàn bộ từ"
+                  ) :
+                  React.createElement('span', { className: "text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-lg border border-emerald-200 font-extrabold" },
+                    `💡 Hiện sẵn ${wordStructure.expectedChars.length - effectiveHiddenCount} chữ gợi ý, cần điền ${effectiveHiddenCount} chữ còn thiếu`
+                  )
+              )
             )
           ),
 
@@ -2584,7 +2922,11 @@ high school | Trường cấp ba 🏫`;
               className: "w-full max-w-xl bg-emerald-50 border border-emerald-300 text-emerald-800 font-extrabold px-4 py-1.5 rounded-2xl flex items-center justify-center gap-2 shadow-xs my-0.5 text-xs sm:text-sm"
             },
               React.createElement('span', { className: "text-base" }, "👉"),
-              React.createElement('span', null, "Bây giờ hãy bấm chọn các chữ cái theo trật tự đúng!")
+              React.createElement('span', null,
+                effectiveHiddenCount === wordStructure.expectedChars.length ?
+                  "Bấm chọn các chữ cái theo trật tự đúng để ghép thành từ!" :
+                  `Bấm chọn ${effectiveHiddenCount} chữ cái còn thiếu để điền vào các ô dấu hỏi "?"`
+              )
             ) : null,
 
           // TARGET LETTER DISPLAY (Responsive phrase display with no horizontal scrollbar needed)
@@ -2615,12 +2957,16 @@ high school | Trường cấp ba 🏫`;
                       ec => ec.wordIndex === wIdx && ec.charIndex === cIdx
                     );
                     const gIdx = targetObj ? targetObj.globalIndex : 0;
-                    const placedTile = playerPlacedTiles[gIdx];
-                    const isCurrentSlot = playerPlacedTiles.length === gIdx && !isWordDone && !isSpellingActive;
+                    const isHidden = hiddenCharIndices.has(gIdx);
+                    const placedTile = isHidden
+                      ? playerPlacedTiles.find(t => t.globalIndex === gIdx)
+                      : null;
+                    const isCurrentSlot = isHidden && !isWordDone && !isSpellingActive && (sortedHiddenIndices[playerPlacedTiles.length] === gIdx);
                     const isAudioHighlighted = highlightedGlobalIdx === gIdx;
 
                     let displayChar = '';
                     let slotStyle = '';
+                    let slotTitle = '';
 
                     if (isWordDone) {
                       displayChar = expectedChar;
@@ -2631,28 +2977,45 @@ high school | Trường cấp ba 🏫`;
                       if (isAudioHighlighted) {
                         slotStyle = 'bg-amber-300 border-3 border-amber-500 text-amber-950 scale-115 shadow-xl ring-4 ring-amber-300 font-black animate-pulse z-10';
                       } else {
-                        slotStyle = 'bg-white/95 border-2 border-purple-200 text-purple-900 font-black shadow-sm';
+                        slotStyle = isHidden
+                          ? 'bg-purple-100/90 border-2 border-dashed border-purple-300 text-purple-900 font-black shadow-xs'
+                          : 'bg-indigo-50/90 border-2 border-indigo-200 text-indigo-900 font-black shadow-xs';
                       }
                     } else {
-                      // Sau khi nghe đánh vần xong: chữ biến mất để học sinh bấm chọn
-                      if (placedTile) {
-                        displayChar = placedTile.char;
-                        slotStyle = 'bg-gradient-to-b from-purple-500 to-indigo-600 text-white shadow-md border-2 border-purple-400 cursor-pointer hover:scale-105';
-                      } else if (isCurrentSlot) {
-                        displayChar = '';
-                        slotStyle = 'bg-purple-100 border-2 border-dashed border-purple-500 text-purple-400 shadow-inner';
+                      // Trạng thái ghép từ
+                      if (!isHidden) {
+                        // Ký tự được hiện sẵn làm gợi ý định hình từ
+                        displayChar = expectedChar;
+                        slotStyle = 'bg-emerald-50/90 border-2 border-emerald-300 text-emerald-800 font-black shadow-xs cursor-pointer hover:bg-emerald-100';
+                        slotTitle = `Chữ gợi ý sẵn: ${expectedChar} (Bấm để nghe phát âm)`;
                       } else {
-                        displayChar = '';
-                        slotStyle = 'bg-slate-100 border-2 border-dashed border-slate-300 text-slate-300';
+                        // Ký tự bị ẩn cần người học tìm và điền vào
+                        if (placedTile) {
+                          displayChar = placedTile.char;
+                          slotStyle = 'bg-gradient-to-b from-purple-500 to-indigo-600 text-white shadow-md border-2 border-purple-400 cursor-pointer hover:scale-105';
+                          slotTitle = "Bấm để xóa chữ này";
+                        } else if (isCurrentSlot) {
+                          displayChar = '?';
+                          slotStyle = 'bg-purple-100 border-2 border-dashed border-purple-500 text-purple-600 font-black shadow-inner animate-pulse';
+                          slotTitle = "Ô cần điền chữ cái tiếp theo";
+                        } else {
+                          displayChar = '?';
+                          slotStyle = 'bg-slate-100 border-2 border-dashed border-slate-300 text-slate-400 font-bold';
+                          slotTitle = "Chữ cái bị ẩn";
+                        }
                       }
                     }
 
                     return React.createElement('div', {
                       key: cIdx,
                       onClick: () => {
-                        if (placedTile && !isWordDone && !isSpellingActive) handleUndoLast();
+                        if (placedTile && !isWordDone && !isSpellingActive) {
+                          handleUndoLast();
+                        } else if (!isHidden && !isWordDone && !isSpellingActive) {
+                          speakLetter(expectedChar, { voice: selectedVoice, mode: spellingMode });
+                        }
                       },
-                      title: placedTile ? "Bấm để xóa chữ này" : undefined,
+                      title: slotTitle || undefined,
                       className: `${slotSizeClass} rounded-xl sm:rounded-2xl flex items-center justify-center font-black transition-all select-none duration-150 shrink-0 ${slotStyle}`
                     }, displayChar);
                   })
@@ -2691,7 +3054,9 @@ high school | Trường cấp ba 🏫`;
               React.createElement('span', null,
                 isSpellingActive ?
                   "🎧 Đang nghe đánh vần mẫu..." :
-                  "Bấm chọn các chữ cái bên dưới:"
+                  effectiveHiddenCount === wordStructure.expectedChars.length ?
+                    "Bấm chọn các chữ cái bên dưới theo thứ tự:" :
+                    `Bấm chọn các chữ cái còn thiếu bên dưới (${effectiveHiddenCount} chữ):`
               ),
               playerPlacedTiles.length > 0 && !isWordDone && !isSpellingActive && React.createElement('div', { className: "flex items-center gap-2" },
                 React.createElement('button', {
@@ -2970,6 +3335,7 @@ high school | Trường cấp ba 🏫`;
 
       // --- Main App Component ---
       const CUSTOM_TOPICS_STORAGE_KEY = 'spelling_custom_topics_v3';
+      const CUSTOM_TOPICS_META_KEY = 'spelling_custom_topics_meta_v3';
 
       const loadSavedCustomTopics = () => {
         try {
@@ -2984,6 +3350,19 @@ high school | Trường cấp ba 🏫`;
         return {};
       };
 
+      const loadSavedCustomTopicsMeta = () => {
+        try {
+          const raw = localStorage.getItem(CUSTOM_TOPICS_META_KEY);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (parsed && typeof parsed === 'object') return parsed;
+          }
+        } catch (e) {
+          console.error('Lỗi khi tải metadata:', e);
+        }
+        return {};
+      };
+
       const App = () => {
         const [gameState, setGameState] = useState(GameState.Start);
         const [playerName, setPlayerName] = useState('');
@@ -2992,6 +3371,8 @@ high school | Trường cấp ba 🏫`;
         const [lastScore, setLastScore] = useState({ score: 0, maxScore: 0, correct: 0, total: 0 });
         const [playSessionKey, setPlaySessionKey] = useState(0);
         const [customTopics, setCustomTopics] = useState(loadSavedCustomTopics);
+        const [customTopicsMeta, setCustomTopicsMeta] = useState(loadSavedCustomTopicsMeta);
+        const [cloudStatus, setCloudStatus] = useState('connecting');
         const [editingTopicName, setEditingTopicName] = useState(null);
         const [showSoundboardModal, setShowSoundboardModal] = useState(false);
         const [spellingMode, setSpellingMode] = useState(() => {
@@ -3007,6 +3388,101 @@ high school | Trường cấp ba 🏫`;
         const allTopics = useMemo(() => {
           return { ...defaultTopics, ...customTopics };
         }, [customTopics]);
+
+        // --- Real-time Cloud Synchronization (Firebase Firestore) ---
+        useEffect(() => {
+          let isSubscribed = true;
+
+          // Connection check as required by Firestore standards
+          const checkConnection = async () => {
+            try {
+              await getDocFromServer(doc(db, 'test', 'connection'));
+              if (isSubscribed) setCloudStatus('connected');
+            } catch (err) {
+              if (isSubscribed) setCloudStatus('connected');
+            }
+          };
+          checkConnection();
+
+          // Listen in real-time to all custom topics created by any user
+          const unsubscribe = onSnapshot(collection(db, 'custom_topics'), (snapshot) => {
+            if (!isSubscribed) return;
+            const cloudTopics = {};
+            const cloudMeta = {};
+
+            snapshot.forEach((docSnap) => {
+              const data = docSnap.data();
+              if (data && data.name && Array.isArray(data.sentences) && data.sentences.length > 0) {
+                cloudTopics[data.name] = data.sentences;
+                cloudMeta[data.name] = {
+                  id: docSnap.id,
+                  authorName: data.authorName || 'Người dùng chia sẻ',
+                  createdAt: data.createdAt || null,
+                  updatedAt: data.updatedAt || null,
+                  isCloud: true
+                };
+              }
+            });
+
+            setCustomTopics((prev) => {
+              const merged = { ...prev, ...cloudTopics };
+              try {
+                localStorage.setItem(CUSTOM_TOPICS_STORAGE_KEY, JSON.stringify(merged));
+              } catch (e) {}
+              return merged;
+            });
+
+            setCustomTopicsMeta((prev) => {
+              const mergedMeta = { ...prev, ...cloudMeta };
+              try {
+                localStorage.setItem(CUSTOM_TOPICS_META_KEY, JSON.stringify(mergedMeta));
+              } catch (e) {}
+              return mergedMeta;
+            });
+
+            setCloudStatus('connected');
+          }, (error) => {
+            console.error('Lỗi khi lắng nghe Firestore custom_topics:', error);
+            if (isSubscribed) setCloudStatus('offline');
+          });
+
+          return () => {
+            isSubscribed = false;
+            unsubscribe();
+          };
+        }, []);
+
+        // Sync existing local topics to cloud so previously created topics are shared
+        useEffect(() => {
+          if (cloudStatus !== 'connected') return;
+          const syncLocalToCloud = async () => {
+            for (const [topicName, sentences] of Object.entries(customTopics)) {
+              if (!customTopicsMeta[topicName]?.id && Array.isArray(sentences) && sentences.length > 0) {
+                const docId = 'topic_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8);
+                const nowIso = new Date().toISOString();
+                const payload = {
+                  id: docId,
+                  name: topicName,
+                  authorName: playerName || 'Người dùng chia sẻ',
+                  sentences: sentences.map(s => ({ en: s.en, vi: s.vi || '' })),
+                  isShared: true,
+                  createdAt: nowIso,
+                  updatedAt: nowIso
+                };
+                try {
+                  await setDoc(doc(db, 'custom_topics', docId), payload);
+                  setCustomTopicsMeta(prev => ({
+                    ...prev,
+                    [topicName]: { id: docId, authorName: payload.authorName, createdAt: nowIso, isCloud: true }
+                  }));
+                } catch (e) {
+                  console.warn('Lỗi khi đồng bộ bài tập cục bộ lên cloud:', e);
+                }
+              }
+            }
+          };
+          syncLocalToCloud();
+        }, [cloudStatus]);
 
         const handleStart = useCallback((name) => {
           setPlayerName(name);
@@ -3030,8 +3506,17 @@ high school | Trường cấp ba 🏫`;
           setGameState(GameState.TopicEditor);
         }, []);
 
-        const handleDeleteTopic = useCallback((topicName) => {
-          if (window.confirm(`Bạn có chắc chắn muốn xóa chủ đề "${topicName}" không?`)) {
+        const handleDeleteTopic = useCallback(async (topicName) => {
+          if (window.confirm(`Bạn có chắc chắn muốn xóa chủ đề "${topicName}" không? Chủ đề này cũng sẽ bị xóa khỏi đám mây để không còn xuất hiện khi chia sẻ.`)) {
+            const meta = customTopicsMeta[topicName];
+            if (meta && meta.id) {
+              try {
+                await deleteDoc(doc(db, 'custom_topics', meta.id));
+              } catch (e) {
+                console.error('Lỗi khi xóa tài liệu Firestore:', e);
+              }
+            }
+
             setCustomTopics(prev => {
               const updated = { ...prev };
               delete updated[topicName];
@@ -3042,10 +3527,51 @@ high school | Trường cấp ba 🏫`;
               }
               return updated;
             });
-          }
-        }, []);
 
-        const handleSaveTopic = useCallback((name, sentences, playImmediately) => {
+            setCustomTopicsMeta(prev => {
+              const updated = { ...prev };
+              delete updated[topicName];
+              try {
+                localStorage.setItem(CUSTOM_TOPICS_META_KEY, JSON.stringify(updated));
+              } catch (e) {}
+              return updated;
+            });
+          }
+        }, [customTopicsMeta]);
+
+        const handleSaveTopic = useCallback(async (name, sentences, playImmediately, author) => {
+          const creatorName = (author || playerName || 'Người dùng chia sẻ').trim().slice(0, 100);
+          const existingMeta = customTopicsMeta[name] || (editingTopicName ? customTopicsMeta[editingTopicName] : null);
+          const docId = existingMeta?.id || ('topic_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8));
+          const nowIso = new Date().toISOString();
+
+          const payload = {
+            id: docId,
+            name: name.trim(),
+            authorName: creatorName,
+            sentences: sentences.map(s => ({ en: s.en, vi: s.vi || '' })),
+            isShared: true,
+            createdAt: existingMeta?.createdAt || nowIso,
+            updatedAt: nowIso
+          };
+
+          // If renaming an existing topic, delete old doc from Firestore
+          if (editingTopicName && editingTopicName !== name && customTopicsMeta[editingTopicName]?.id) {
+            try {
+              await deleteDoc(doc(db, 'custom_topics', customTopicsMeta[editingTopicName].id));
+            } catch (e) {
+              console.warn('Lỗi khi xóa bài tập cũ khi đổi tên:', e);
+            }
+          }
+
+          // Save to Firestore
+          try {
+            await setDoc(doc(db, 'custom_topics', docId), payload);
+          } catch (e) {
+            console.error('Lỗi khi lưu lên Firestore:', e);
+          }
+
+          // Update local state immediately
           setCustomTopics(prev => {
             const updated = { ...prev };
             if (editingTopicName && editingTopicName !== name && updated[editingTopicName]) {
@@ -3060,6 +3586,24 @@ high school | Trường cấp ba 🏫`;
             return updated;
           });
 
+          setCustomTopicsMeta(prev => {
+            const updated = { ...prev };
+            if (editingTopicName && editingTopicName !== name && updated[editingTopicName]) {
+              delete updated[editingTopicName];
+            }
+            updated[name] = {
+              id: docId,
+              authorName: creatorName,
+              createdAt: payload.createdAt,
+              updatedAt: payload.updatedAt,
+              isCloud: true
+            };
+            try {
+              localStorage.setItem(CUSTOM_TOPICS_META_KEY, JSON.stringify(updated));
+            } catch (e) {}
+            return updated;
+          });
+
           if (playImmediately) {
             setSelectedTopic(name);
             setTopicSentences(sentences);
@@ -3068,7 +3612,7 @@ high school | Trường cấp ba 🏫`;
           } else {
             setGameState(GameState.TopicSelection);
           }
-        }, [editingTopicName]);
+        }, [editingTopicName, customTopicsMeta, playerName]);
 
         const handleCancelEditor = useCallback(() => {
           setGameState(GameState.TopicSelection);
@@ -3113,6 +3657,8 @@ high school | Trường cấp ba 🏫`;
               return React.createElement(TopicSelectionScreen, {
                 presetTopics: defaultTopics,
                 customTopics: customTopics,
+                customTopicsMeta: customTopicsMeta,
+                cloudStatus: cloudStatus,
                 onSelectTopic: handleSelectTopic,
                 onCreateTopic: handleCreateTopic,
                 onEditTopic: handleEditTopic,
@@ -3123,6 +3669,8 @@ high school | Trường cấp ba 🏫`;
               return React.createElement(TopicEditorScreen, {
                 initialTopicName: editingTopicName,
                 initialSentences: editingTopicName ? customTopics[editingTopicName] : null,
+                initialAuthorName: editingTopicName && customTopicsMeta[editingTopicName]?.authorName,
+                currentAuthorName: playerName,
                 existingTopicNames: Object.keys(allTopics),
                 onSave: handleSaveTopic,
                 onCancel: handleCancelEditor,

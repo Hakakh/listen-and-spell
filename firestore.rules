@@ -1,0 +1,40 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function isValidCustomTopic(topicId) {
+      return incoming().keys().hasAll(['id', 'name', 'sentences'])
+        && incoming().keys().hasOnly(['id', 'name', 'authorName', 'authorUid', 'sentences', 'isShared', 'createdAt', 'updatedAt'])
+        && incoming().id == topicId
+        && incoming().name is string
+        && incoming().name.size() > 0
+        && incoming().name.size() <= 150
+        && (!('authorName' in incoming()) || (incoming().authorName is string && incoming().authorName.size() <= 100))
+        && (!('authorUid' in incoming()) || (incoming().authorUid is string && incoming().authorUid.size() <= 128))
+        && incoming().sentences is list
+        && incoming().sentences.size() > 0
+        && incoming().sentences.size() <= 100
+        && (!('isShared' in incoming()) || incoming().isShared is bool)
+        && (!('createdAt' in incoming()) || incoming().createdAt is string)
+        && (!('updatedAt' in incoming()) || incoming().updatedAt is string);
+    }
+
+    match /custom_topics/{topicId} {
+      // Allow all users of the app to read, create, update, and manage shared topics
+      allow read: if true;
+      allow create: if isValidId(topicId) && isValidCustomTopic(topicId);
+      allow update: if isValidId(topicId) && isValidCustomTopic(topicId);
+      allow delete: if isValidId(topicId);
+    }
+
+    match /test/{docId} {
+      allow read, write: if true;
+    }
+  }
+}

@@ -1,0 +1,50 @@
+{
+  "entities": {
+    "CustomTopic": {
+      "title": "CustomTopic",
+      "description": "Chủ đề bài tập nghe và đánh vần từ vựng do người dùng tạo và chia sẻ",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Mã định danh duy nhất của chủ đề bài tập"
+        },
+        "name": {
+          "type": "string",
+          "description": "Tên chủ đề bài tập"
+        },
+        "authorName": {
+          "type": "string",
+          "description": "Tên người tạo bài tập"
+        },
+        "authorUid": {
+          "type": "string",
+          "description": "Mã định danh người dùng Firebase Auth của người tạo"
+        },
+        "sentences": {
+          "type": "array",
+          "description": "Danh sách các từ vựng kèm nghĩa tiếng Việt trong bài tập"
+        },
+        "isShared": {
+          "type": "boolean",
+          "description": "Trạng thái chia sẻ trực tuyến cho mọi người"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Thời điểm tạo bài tập định dạng ISO"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Thời điểm cập nhật bài tập định dạng ISO"
+        }
+      },
+      "required": ["id", "name", "sentences", "authorUid"]
+    }
+  },
+  "firestore": {
+    "/custom_topics/{topicId}": {
+      "schema": "CustomTopic",
+      "description": "Bộ sưu tập các chủ đề bài tập tự tạo được chia sẻ giữa mọi người dùng"
+    }
+  }
+}
